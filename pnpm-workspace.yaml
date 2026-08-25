@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+
+# pnpm blocks dependency build scripts by default. Only packages that genuinely
+# require one are allowed: bcrypt compiles a native addon, prisma downloads its
+# query engines. Everything else stays blocked.
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - bcrypt
+  - prisma
