@@ -1,0 +1,95 @@
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+
+export interface ApiErrorBody {
+  statusCode: number;
+  code: string;
+  message: string;
+  details?: string[];
+  requestId?: string;
+}
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+    readonly details?: string[],
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+
+  /// Validation failures arrive as a list of constraint messages; surfacing the
+  /// first one is more useful to a participant than the generic wrapper text.
+  get displayMessage(): string {
+    return this.details?.[0] ?? this.message;
+  }
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/// A single shared refresh promise. Without this, several components mounting at
+/// once each fire their own refresh, and because the API rotates refresh tokens
+/// the later ones would replay an already-rotated token — which the server treats
+/// as theft and revokes the whole session.
+async function refreshSession(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    try {
+      const res = await fetch(`${BASE}/api/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      // Cleared on the next tick so concurrent callers all observe this result.
+      setTimeout(() => {
+        refreshInFlight = null;
+      }, 0);
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+interface RequestOptions {
+  method?: string;
+  body?: unknown;
+  signal?: AbortSignal;
+  retryOnUnauthorized?: boolean;
+}
+
+export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { method = 'GET', body, signal, retryOnUnauthorized = true } = options;
+
+  const res = await fetch(`${BASE}/api${path}`, {
+    method,
+    credentials: 'include',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  });
+
+  if (res.status === 401 && retryOnUnauthorized && !path.startsWith('/auth/')) {
+    if (await refreshSession()) {
+      return api<T>(path, { ...options, retryOnUnauthorized: false });
+    }
+  }
+
+  if (!res.ok) {
+    const problem = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    throw new ApiError(
+      res.status,
+      problem?.code ?? 'ERROR',
+      problem?.message ?? res.statusText,
+      problem?.details,
+    );
+  }
+
+  if (res.status === 204) return undefined as T;
+
+  return (await res.json()) as T;
+}
+
+export const apiUrl = (path: string) => `${BASE}/api${path}`;

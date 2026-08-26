@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    // nest-cli deletes dist on every build. Incremental compilation would then
+    // trust a stale cache and re-emit only changed files, leaving a dist that is
+    // missing modules and fails at require time.
+    "incremental": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "prisma", "**/*.spec.ts"]
+}

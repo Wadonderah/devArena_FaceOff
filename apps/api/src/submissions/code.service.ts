@@ -24,7 +24,7 @@ export class CodeService {
   /// Graded submission. Everything cheap is validated before a job is queued, so
   /// an invalid request never reaches Judge0.
   async submit(userId: string, dto: SubmitCodeDto) {
-    const { round, coding, challenge } = await this.validate(userId, dto);
+    const { coding, challenge } = await this.validate(userId, dto);
 
     const submission = await this.prisma.submission.create({
       data: {

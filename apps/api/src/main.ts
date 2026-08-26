@@ -23,12 +23,12 @@ async function bootstrap(): Promise<void> {
   app.use(cookieParser());
 
   app.enableCors({
+    // Refuse by withholding the CORS headers rather than raising — throwing here
+    // surfaces as a 500 before any guard runs. The browser blocks the response
+    // either way, and OriginGuard still rejects the request server-side with a
+    // proper 403 for clients that ignore CORS entirely.
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error('Origin not allowed'), false);
+      callback(null, !origin || allowedOrigins.includes(origin));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],

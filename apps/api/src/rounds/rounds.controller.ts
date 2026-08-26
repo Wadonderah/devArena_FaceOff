@@ -8,7 +8,9 @@ import {
   Post,
 } from '@nestjs/common';
 import { Role, RoundState } from '@prisma/client';
+import { UseGuards } from '@nestjs/common';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../common/decorators';
+import { VerifiedEmailGuard } from '../auth/guards/verified-email.guard';
 import { RoundsService } from './rounds.service';
 import { CreateRoundDto, SetRoundChallengesDto, UpdateRoundDto } from './dto/round.dto';
 
@@ -33,6 +35,15 @@ export class RoundsController {
     return user.role === Role.ORGANIZER || user.role === Role.ADMIN
       ? this.rounds.findOneForOrganizer(id)
       : this.rounds.findOneForParticipant(id, user.id);
+  }
+
+  @Get('rounds/:id/challenge-ids')
+  @UseGuards(VerifiedEmailGuard)
+  challengeIds(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.rounds.challengeIdsForParticipant(id, userId);
   }
 
   @Patch('rounds/:id')

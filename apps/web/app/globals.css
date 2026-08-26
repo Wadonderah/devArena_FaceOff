@@ -1,0 +1,112 @@
+@import 'tailwindcss';
+
+/*
+  Design tokens for the Face-Off platform.
+
+  Placeholder brand values: the build document references a dark-slate system
+  established in the organizer's PowerPoint materials, which is not in this repo.
+  Swapping the --color-brand-* and --color-surface-* ramps here re-skins the whole
+  app without touching a component.
+*/
+@theme {
+  --color-surface-0: #080b14;
+  --color-surface-1: #0e1320;
+  --color-surface-2: #161d2f;
+  --color-surface-3: #1f2940;
+  --color-line: #2a3550;
+  --color-line-bright: #3a4a6e;
+
+  --color-ink: #f2f5fb;
+  --color-ink-dim: #9aa8c4;
+  --color-ink-faint: #64748b;
+
+  --color-brand: #6d5ef8;
+  --color-brand-bright: #8f83ff;
+  --color-brand-deep: #4b3ee0;
+
+  --color-live: #ff6b35;
+  --color-success: #3ddc97;
+  --color-warn: #fbbf24;
+  --color-danger: #ff5c5c;
+
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', monospace;
+
+  --radius-card: 14px;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    background: var(--color-surface-0);
+    color-scheme: dark;
+  }
+
+  body {
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgba(109, 94, 248, 0.14), transparent 62%),
+      radial-gradient(700px 420px at 95% 0%, rgba(255, 107, 53, 0.07), transparent 58%),
+      var(--color-surface-0);
+    background-attachment: fixed;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+
+  /* Visible focus is non-negotiable — keyboard users must always know where
+     they are, including inside the code editor. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-bright);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: rgba(109, 94, 248, 0.35);
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .panel {
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-surface-2) 92%, transparent),
+      var(--color-surface-1)
+    );
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  .hairline {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+}
+
+/* Every animation in the app is gated on this. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

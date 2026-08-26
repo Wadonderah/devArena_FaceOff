@@ -215,6 +215,32 @@ export class RoundsService {
     return { ...round, enrolled: enrolled !== null };
   }
 
+  /// The ordered challenge ids in a round, without any challenge content. A
+  /// participant needs this to know what to fetch; the content itself still goes
+  /// through the per-challenge authorization in ChallengesService.
+  async challengeIdsForParticipant(roundId: string, userId: string) {
+    const round = await this.requireLiveRound(roundId);
+
+    const enrolled = await this.prisma.competitionParticipant.findUnique({
+      where: {
+        competitionId_userId: { competitionId: round.competitionId, userId },
+      },
+      select: { id: true },
+    });
+
+    if (!enrolled) {
+      throw new ForbiddenException('Join the competition to view its challenges');
+    }
+
+    const links = await this.prisma.roundChallenge.findMany({
+      where: { roundId },
+      orderBy: { orderIndex: 'asc' },
+      select: { challengeId: true },
+    });
+
+    return { challengeIds: links.map((l) => l.challengeId) };
+  }
+
   async requireLiveRound(roundId: string) {
     const round = await this.prisma.round.findUnique({
       where: { id: roundId },
