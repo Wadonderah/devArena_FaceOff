@@ -13,19 +13,36 @@ export class Judge0HealthIndicator {
     const check = this.indicator.check('judge0');
 
     try {
-      const response = await fetch(`${this.config.get('JUDGE0_URL')}/about`, {
-        headers: { 'X-Auth-Token': this.config.get('JUDGE0_TOKEN') },
-        signal: AbortSignal.timeout(3000),
-      });
+      // /about only proves the web tier is answering. /workers reads the queue
+      // from Judge0's own Redis, which is what submission creation depends on —
+      // without it the probe reports healthy while no code can actually run.
+      const [about, workers] = await Promise.all([
+        this.request('/about'),
+        this.request('/workers'),
+      ]);
 
-      if (!response.ok) {
-        return check.down({ httpStatus: response.status });
+      if (!about.ok) {
+        return check.down({ reason: 'api unreachable', httpStatus: about.status });
       }
 
-      const about = (await response.json()) as { version?: string };
-      return check.up({ version: about.version });
+      if (!workers.ok) {
+        return check.down({
+          reason: 'queue backend unavailable — submissions cannot be graded',
+          httpStatus: workers.status,
+        });
+      }
+
+      const info = (await about.json().catch(() => ({}))) as { version?: string };
+      return check.up({ version: info.version });
     } catch (error) {
       return check.down({ message: (error as Error).message });
     }
+  }
+
+  private request(path: string): Promise<Response> {
+    return fetch(`${this.config.get('JUDGE0_URL')}${path}`, {
+      headers: { 'X-Auth-Token': this.config.get('JUDGE0_TOKEN') },
+      signal: AbortSignal.timeout(3000),
+    });
   }
 }

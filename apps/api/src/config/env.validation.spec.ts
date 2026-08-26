@@ -74,6 +74,28 @@ describe('validateEnv', () => {
     ).toThrow(/COOKIE_SECURE/);
   });
 
+  it('defaults the email-verification bypass to off', () => {
+    expect(validateEnv({ ...base }).AUTH_SKIP_EMAIL_VERIFICATION).toBe(false);
+  });
+
+  it('allows the email-verification bypass in development', () => {
+    const env = validateEnv({ ...base, AUTH_SKIP_EMAIL_VERIFICATION: 'true' });
+    expect(env.AUTH_SKIP_EMAIL_VERIFICATION).toBe(true);
+  });
+
+  it('refuses to bypass email verification in production', () => {
+    expect(() =>
+      validateEnv({
+        ...base,
+        NODE_ENV: 'production',
+        MAIL_DRIVER: 'zeptomail',
+        ZEPTOMAIL_TOKEN: 'zt',
+        ZEPTOMAIL_FROM_ADDRESS: 'noreply@akwannya-hub.org',
+        AUTH_SKIP_EMAIL_VERIFICATION: 'true',
+      }),
+    ).toThrow(/cannot be bypassed in production/);
+  });
+
   it('rejects an out-of-range bcrypt cost', () => {
     expect(() => validateEnv({ ...base, BCRYPT_ROUNDS: '4' })).toThrow(/BCRYPT_ROUNDS/);
   });

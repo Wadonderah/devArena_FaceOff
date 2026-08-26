@@ -37,6 +37,11 @@ export const envSchema = z
 
     BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
 
+    // Development convenience: treats every account as verified and skips the
+    // verification email. Rejected outright when NODE_ENV=production below, so
+    // it cannot be switched on for a real competition.
+    AUTH_SKIP_EMAIL_VERIFICATION: booleanish.default('false'),
+
     JUDGE0_URL: z.string().url(),
     JUDGE0_TOKEN: z.string().min(1),
 
@@ -72,6 +77,14 @@ export const envSchema = z
     }
 
     if (env.NODE_ENV === 'production') {
+      if (env.AUTH_SKIP_EMAIL_VERIFICATION) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['AUTH_SKIP_EMAIL_VERIFICATION'],
+          message:
+            'email verification cannot be bypassed in production — unverified accounts must not compete',
+        });
+      }
       if (env.MAIL_DRIVER === 'console') {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

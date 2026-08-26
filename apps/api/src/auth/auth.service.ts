@@ -59,16 +59,25 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, this.config.get('BCRYPT_ROUNDS'));
+    const skipVerification = this.config.get('AUTH_SKIP_EMAIL_VERIFICATION');
 
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         passwordHash,
         role: Role.PARTICIPANT,
+        emailVerified: skipVerification,
         profile: { create: { displayName: dto.displayName } },
       },
       select: { id: true, email: true },
     });
+
+    if (skipVerification) {
+      this.logger.warn(
+        `AUTH_SKIP_EMAIL_VERIFICATION is on — ${user.email} was created pre-verified`,
+      );
+      return { message: 'Account created. Email verification is disabled in this environment.' };
+    }
 
     await this.sendVerificationEmail(user.id, user.email);
 
