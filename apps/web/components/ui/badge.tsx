@@ -1,13 +1,14 @@
 import { cn } from '@/lib/cn';
 import type { RoundState, CompetitionState } from '@/lib/types';
 
-type Tone = 'neutral' | 'live' | 'success' | 'warn' | 'brand';
+type Tone = 'neutral' | 'live' | 'success' | 'warn' | 'danger' | 'brand';
 
 const TONES: Record<Tone, string> = {
   neutral: 'bg-surface-3 text-ink-dim border-line',
   live: 'bg-live/15 text-live border-live/40',
   success: 'bg-success/15 text-success border-success/40',
   warn: 'bg-warn/15 text-warn border-warn/40',
+  danger: 'bg-danger/15 text-danger border-danger/40',
   brand: 'bg-brand/15 text-brand-bright border-brand/40',
 };
 

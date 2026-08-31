@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../common/decorators';
+import { ROLE_RANK } from '../auth/guards/roles.guard';
 import { VerifiedEmailGuard } from '../auth/guards/verified-email.guard';
 import { CompetitionsService } from './competitions.service';
 import { CreateCompetitionDto, UpdateCompetitionDto } from './dto/competition.dto';
@@ -56,6 +57,6 @@ export class CompetitionsController {
   }
 
   private isStaff(user: AuthenticatedUser): boolean {
-    return user.role === Role.ORGANIZER || user.role === Role.ADMIN;
+    return ROLE_RANK[user.role] >= ROLE_RANK[Role.ORGANIZER];
   }
 }

@@ -40,6 +40,7 @@ export class RoundsService {
         startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
         endsAt: dto.endsAt ? new Date(dto.endsAt) : null,
         allowedLanguages: dto.type === RoundType.CODING ? (dto.allowedLanguages ?? []) : [],
+        revealMode: dto.revealMode,
       },
     });
   }
@@ -75,6 +76,10 @@ export class RoundsService {
           dto.allowedLanguages !== undefined && round.type === RoundType.CODING
             ? dto.allowedLanguages
             : undefined,
+        // Falls under the same pre-LIVE freeze as weight and timing above:
+        // changing the reveal policy mid-round would treat participants who
+        // already answered differently from those who have not.
+        revealMode: dto.revealMode,
       },
     });
   }
@@ -253,6 +258,7 @@ export class RoundsService {
         endsAt: true,
         weight: true,
         allowedLanguages: true,
+        revealMode: true,
       },
     });
 

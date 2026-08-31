@@ -11,7 +11,7 @@ import { Badge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
 import { useCountdown, useMcqProgress, useRound } from '@/lib/hooks';
-import type { Challenge } from '@/lib/types';
+import type { Challenge, McqSubmitResponse } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
 function Question({
@@ -30,15 +30,22 @@ function Question({
   onAnswered: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Extract<
+    McqSubmitResponse,
+    { revealed: true }
+  > | null>(null);
   const queryClient = useQueryClient();
 
   const submit = useMutation({
     mutationFn: (optionId: string) =>
-      api('/submissions/mcq', {
+      api<McqSubmitResponse>('/submissions/mcq', {
         method: 'POST',
         body: { roundId, challengeId: challenge.id, optionId },
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Only IMMEDIATE rounds send correctness back; under the other modes the
+      // keys are absent and this stays null, leaving the previous behaviour.
+      if (result.revealed) setFeedback(result);
       queryClient.invalidateQueries({ queryKey: ['mcq-progress', roundId] });
       onAnswered();
     },
@@ -77,14 +84,20 @@ function Question({
         <div className="space-y-2">
           {question.options.map((option) => {
             const active = selected === option.id;
+            const isTheAnswer = feedback?.correctOptionId === option.id;
+            const isYourWrongPick = Boolean(feedback) && active && !feedback?.isCorrect;
             return (
               <label
                 key={option.id}
                 className={cn(
                   'flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors duration-150',
-                  active
-                    ? 'border-brand bg-brand/10'
-                    : 'border-line bg-surface-1 hover:border-line-bright hover:bg-surface-2',
+                  isTheAnswer
+                    ? 'border-success/60 bg-success/10'
+                    : isYourWrongPick
+                      ? 'border-danger/60 bg-danger/10'
+                      : active
+                        ? 'border-brand bg-brand/10'
+                        : 'border-line bg-surface-1 hover:border-line-bright hover:bg-surface-2',
                   (answered || submit.isPending) && 'cursor-not-allowed opacity-60',
                 )}
               >
@@ -106,6 +119,16 @@ function Question({
                   {option.label}
                 </span>
                 <span className="text-[15px] leading-relaxed">{option.text}</span>
+                {isTheAnswer && (
+                  <span className="ml-auto shrink-0 text-[12px] font-medium text-success">
+                    ✓ Correct answer
+                  </span>
+                )}
+                {isYourWrongPick && (
+                  <span className="ml-auto shrink-0 text-[12px] font-medium text-danger">
+                    ✕ Your answer
+                  </span>
+                )}
               </label>
             );
           })}
@@ -116,6 +139,34 @@ function Question({
         <p role="alert" className="mt-4 rounded-lg border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-[14px] text-danger">
           {submit.error instanceof ApiError ? submit.error.displayMessage : 'Could not submit.'}
         </p>
+      )}
+
+      {feedback && (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-4"
+          // Announced so a screen-reader user gets the verdict without having to
+          // hunt back through the option list for a colour change.
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-wrap items-center gap-2.5">
+            <Badge tone={feedback.isCorrect ? 'success' : 'danger'}>
+              {feedback.isCorrect ? 'Correct' : 'Incorrect'}
+            </Badge>
+            <span className="text-[13px] text-ink-dim">
+              {feedback.pointsAwarded} of {challenge.points} points
+            </span>
+          </div>
+
+          {feedback.explanation && (
+            <p className="mt-3 rounded-lg border border-line bg-surface-0 px-3.5 py-3 text-[14px] leading-relaxed text-ink-dim">
+              {feedback.explanation}
+            </p>
+          )}
+        </motion.div>
       )}
 
       <div className="mt-5 flex items-center gap-3">

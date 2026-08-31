@@ -7,6 +7,9 @@ import { Shell } from '@/components/shell';
 import { Button } from '@/components/ui/button';
 import { CompetitionStateBadge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
+import { Field } from '@/components/ui/input';
+import { TextAreaField } from '@/components/ui/textarea';
+import { useState } from 'react';
 import { api, ApiError, apiUrl } from '@/lib/api';
 import type { CompetitionListItem, RoundState, RoundSummary } from '@/lib/types';
 
@@ -102,6 +105,9 @@ function CompetitionAdmin({ competition }: { competition: CompetitionListItem })
         </div>
 
         <div className="flex gap-2">
+          <Link href={`/admin/competitions/${competition.id}`}>
+            <Button size="sm">Manage</Button>
+          </Link>
           <Link href={`/leaderboard/${competition.id}`}>
             <Button size="sm" variant="ghost">Leaderboard</Button>
           </Link>
@@ -133,7 +139,84 @@ function CompetitionAdmin({ competition }: { competition: CompetitionListItem })
   );
 }
 
+function NewCompetitionForm({ onDone }: { onDone: () => void }) {
+  const [form, setForm] = useState({ name: '', slug: '', description: '' });
+
+  const create = useMutation({
+    mutationFn: () =>
+      api('/competitions', {
+        method: 'POST',
+        body: {
+          name: form.name,
+          slug: form.slug,
+          ...(form.description ? { description: form.description } : {}),
+        },
+      }),
+    onSuccess: onDone,
+  });
+
+  // Derive the slug from the name until the organizer edits it themselves; the
+  // API rejects anything that is not lowercase-hyphenated.
+  const setName = (name: string) =>
+    setForm((prev) => ({
+      ...prev,
+      name,
+      slug:
+        prev.slug === slugify(prev.name)
+          ? slugify(name)
+          : prev.slug,
+    }));
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        create.mutate();
+      }}
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Name" required value={form.name} onChange={(e) => setName(e.target.value)} />
+        <Field
+          label="Slug"
+          required
+          hint="Lowercase words separated by hyphens"
+          value={form.slug}
+          onChange={(e) => setForm({ ...form, slug: e.target.value })}
+        />
+      </div>
+
+      <TextAreaField
+        label="Description"
+        className="min-h-16"
+        value={form.description}
+        onChange={(e) => setForm({ ...form, description: e.target.value })}
+      />
+
+      {create.error && (
+        <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-[14px] text-danger">
+          {create.error instanceof ApiError ? create.error.displayMessage : 'Could not create.'}
+        </p>
+      )}
+
+      <Button type="submit" loading={create.isPending}>
+        Create competition
+      </Button>
+    </form>
+  );
+}
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
 function AdminContent() {
+  const [creating, setCreating] = useState(false);
+  const queryClient = useQueryClient();
+
   const { data: overview } = useQuery({
     queryKey: ['admin-overview'],
     queryFn: () => api<Overview>('/admin/overview'),
@@ -147,12 +230,37 @@ function AdminContent() {
 
   return (
     <>
-      <header className="mb-6">
-        <h1 className="text-3xl">Organizer console</h1>
-        <p className="mt-1.5 text-[15px] text-ink-dim">
-          Start and end rounds, watch the pipeline, export results.
-        </p>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl">Organizer console</h1>
+          <p className="mt-1.5 text-[15px] text-ink-dim">
+            Create competitions and rounds, author challenges, run the event.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Link href="/admin/challenges">
+            <Button variant="secondary">Challenge library</Button>
+          </Link>
+          <Button
+            variant={creating ? 'secondary' : 'primary'}
+            onClick={() => setCreating(!creating)}
+          >
+            {creating ? 'Cancel' : 'New competition'}
+          </Button>
+        </div>
       </header>
+
+      {creating && (
+        <section className="panel hairline mb-6 p-6">
+          <h2 className="mb-4 text-lg">New competition</h2>
+          <NewCompetitionForm
+            onDone={() => {
+              setCreating(false);
+              queryClient.invalidateQueries({ queryKey: ['competitions'] });
+            }}
+          />
+        </section>
+      )}
 
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {overview ? (

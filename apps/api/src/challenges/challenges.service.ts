@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ChallengeType, Prisma, RoundState } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { relabel, seededShuffle } from '../common/shuffle';
 import {
   ORGANIZER_CHALLENGE_SELECT,
   PARTICIPANT_CHALLENGE_SELECT,
@@ -211,7 +212,35 @@ export class ChallengesService {
     });
 
     if (!challenge) throw new NotFoundException('Challenge not found');
-    return challenge;
+
+    return this.withShuffledOptions(challenge, userId);
+  }
+
+  /// Presents MCQ options in a per-participant order, relabelled by position.
+  ///
+  /// Both halves matter. Shuffling alone is not enough: if each option kept its
+  /// stored label, every participant's "B" would still be the same option and
+  /// "the answer is B" would transfer intact. Reassigning A-D by the participant's
+  /// own ordering is what makes a shared letter meaningless.
+  ///
+  /// Purely presentational — grading resolves the correct option by id, so the
+  /// label a participant saw can never affect their score.
+  private withShuffledOptions<
+    T extends {
+      mcqQuestion: { id: string; options: { id: string; label: string; text: string }[] } | null;
+    },
+  >(challenge: T, userId: string): T {
+    if (!challenge.mcqQuestion) return challenge;
+
+    const { id, options } = challenge.mcqQuestion;
+
+    return {
+      ...challenge,
+      mcqQuestion: {
+        ...challenge.mcqQuestion,
+        options: relabel(seededShuffle(options, `${userId}:${id}`)),
+      },
+    };
   }
 
   /// Every organizer edit bumps the version so submissions graded against the

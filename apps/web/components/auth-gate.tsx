@@ -10,9 +10,11 @@ import { SkeletonRows } from '@/components/ui/skeleton';
 export function AuthGate({
   children,
   requireStaff,
+  requireSuperAdmin,
 }: {
   children: React.ReactNode;
   requireStaff?: boolean;
+  requireSuperAdmin?: boolean;
 }) {
   const router = useRouter();
   const { data: user, isLoading, isError } = useCurrentUser();
@@ -23,7 +25,8 @@ export function AuthGate({
 
   useEffect(() => {
     if (user && requireStaff && user.role === 'PARTICIPANT') router.replace('/dashboard');
-  }, [user, requireStaff, router]);
+    if (user && requireSuperAdmin && user.role !== 'SUPER_ADMIN') router.replace('/dashboard');
+  }, [user, requireStaff, requireSuperAdmin, router]);
 
   if (isLoading || !user) {
     return (
@@ -34,6 +37,7 @@ export function AuthGate({
   }
 
   if (requireStaff && user.role === 'PARTICIPANT') return null;
+  if (requireSuperAdmin && user.role !== 'SUPER_ADMIN') return null;
 
   return <>{children}</>;
 }

@@ -17,9 +17,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { data: user } = useCurrentUser();
   const logout = useLogout();
 
-  const isStaff = user?.role === 'ORGANIZER' || user?.role === 'ADMIN';
+  const isStaff = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
-  const links = isStaff ? [...NAV, { href: '/admin', label: 'Organizer' }] : NAV;
+  const links = [
+    ...NAV,
+    ...(isStaff ? [{ href: '/admin', label: 'Organizer' }] : []),
+    ...(isSuperAdmin ? [{ href: '/admin/system', label: 'System' }] : []),
+  ];
 
   return (
     <div className="min-h-dvh flex flex-col">

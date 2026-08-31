@@ -132,6 +132,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
           code: 'NOT_FOUND',
           message: 'Record not found',
         };
+      case 'P2024':
+        // Connection pool exhausted. The database is fine; this instance ran out
+        // of connections, so it is a availability problem rather than a bug in
+        // the request. 503 also tells any proxy in front of us it may retry.
+        return {
+          status: HttpStatus.SERVICE_UNAVAILABLE,
+          code: 'DATABASE_BUSY',
+          message: 'The service is briefly overloaded. Please try again.',
+        };
       default:
         this.logger.error(`Unmapped Prisma error ${error.code}`, error.message);
         return {

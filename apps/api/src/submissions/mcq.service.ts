@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, RoundState, RoundType, ScoreSource } from '@prisma/client';
+import { Prisma, RevealMode, RoundState, RoundType, ScoreSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { relabel, seededShuffle } from '../common/shuffle';
 import { RoundsService } from '../rounds/rounds.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { gradeMcq } from '../scoring/scoring';
@@ -39,6 +40,7 @@ export class McqService {
             mcqQuestion: {
               select: {
                 id: true,
+                explanation: true,
                 options: { select: { id: true, isCorrect: true } },
               },
             },
@@ -59,10 +61,18 @@ export class McqService {
       throw new NotFoundException('That option does not belong to this question');
     }
 
-    // One attempt per question. Enforced here for a clear error, and by a unique
-    // index on (userId, questionId) so concurrent requests cannot both land.
+    // One attempt per question PER ROUND. Enforced here for a clear error, and by
+    // a unique index on (userId, roundId, questionId) so concurrent requests
+    // cannot both land. Scoping to the round matters because the challenge
+    // library is shared: the same question may appear in a later competition.
     const existing = await this.prisma.mCQAttempt.findUnique({
-      where: { userId_questionId: { userId, questionId: question.id } },
+      where: {
+        userId_roundId_questionId: {
+          userId,
+          roundId: dto.roundId,
+          questionId: question.id,
+        },
+      },
       select: { id: true },
     });
 
@@ -110,10 +120,22 @@ export class McqService {
         mcqAttemptId: attempt.id,
       });
 
-      // Deliberately silent about correctness. Telling a participant they were
-      // right or wrong during a live round leaks the answer to anyone willing to
-      // compare notes. Results open up once the round closes.
-      return { recorded: true, answeredAt: attempt.answeredAt };
+      // The response SHAPE is discriminated rather than widened: under any mode
+      // other than IMMEDIATE the correctness keys are absent entirely, so a client
+      // cannot infer the answer from the presence of a null field.
+      if (round.revealMode !== RevealMode.IMMEDIATE) {
+        return { recorded: true, answeredAt: attempt.answeredAt, revealed: false as const };
+      }
+
+      return {
+        recorded: true,
+        answeredAt: attempt.answeredAt,
+        revealed: true as const,
+        isCorrect,
+        correctOptionId: correctOption.id,
+        explanation: question.explanation,
+        pointsAwarded: rawScore,
+      };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -143,10 +165,16 @@ export class McqService {
   async results(userId: string, roundId: string) {
     const round = await this.prisma.round.findUnique({
       where: { id: roundId },
-      select: { id: true, state: true, name: true },
+      select: { id: true, state: true, name: true, revealMode: true },
     });
 
     if (!round) throw new NotFoundException('Round not found');
+
+    // NEVER means the answers stay closed permanently, not merely until the round
+    // ends — an organizer choosing it wants the question bank kept reusable.
+    if (round.revealMode === RevealMode.NEVER) {
+      throw new ForbiddenException('Answers are not published for this round');
+    }
 
     if (round.state !== RoundState.COMPLETED && round.state !== RoundState.ARCHIVED) {
       throw new ForbiddenException('Results are published once the round closes');
@@ -161,6 +189,7 @@ export class McqService {
         selectedOptionId: true,
         correctOptionId: true,
         answeredAt: true,
+        questionId: true,
         challenge: { select: { id: true, title: true, points: true } },
         question: {
           select: {
@@ -178,7 +207,20 @@ export class McqService {
     const earned = attempts.reduce((sum, a) => sum + a.rawScore.toNumber(), 0);
     const available = attempts.reduce((sum, a) => sum + a.challenge.points, 0);
 
-    return { round, attempts, earned, available };
+    // Re-apply the participant's own ordering so the review screen shows the same
+    // letters they answered under. Without this, someone who picked "C" during the
+    // round would see their answer sitting against a different letter afterwards.
+    const ordered = attempts.map((attempt) => ({
+      ...attempt,
+      question: {
+        ...attempt.question,
+        options: relabel(
+          seededShuffle(attempt.question.options, `${userId}:${attempt.questionId}`),
+        ),
+      },
+    }));
+
+    return { round, attempts: ordered, earned, available };
   }
 
   private async assertEnrolled(competitionId: string, userId: string): Promise<void> {

@@ -1,17 +1,25 @@
 import {
+  Body,
   Controller,
   Get,
   Header,
   Param,
   ParseIntPipe,
   ParseUUIDPipe,
+  Patch,
   Query,
+  Req,
   Res,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import type { Response } from 'express';
-import { Roles } from '../common/decorators';
+import type { Request, Response } from 'express';
+import { CurrentUser, Roles } from '../common/decorators';
 import { AdminService } from './admin.service';
+import {
+  ListUsersQueryDto,
+  UpdateUserActiveDto,
+  UpdateUserRoleDto,
+} from './dto/user-admin.dto';
 
 @Controller('admin')
 @Roles(Role.ORGANIZER)
@@ -35,8 +43,42 @@ export class AdminController {
   }
 
   @Get('audit')
-  @Roles(Role.ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   audit(@Query('limit', new ParseIntPipe({ optional: true })) limit?: number) {
     return this.admin.auditLog(limit);
+  }
+
+  @Get('users')
+  @Roles(Role.SUPER_ADMIN)
+  listUsers(@Query() query: ListUsersQueryDto) {
+    return this.admin.listUsers(query.search, query.role);
+  }
+
+  @Patch('users/:id/role')
+  @Roles(Role.SUPER_ADMIN)
+  setUserRole(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserRoleDto,
+    @CurrentUser('id') actorId: string,
+    @Req() req: Request,
+  ) {
+    return this.admin.setUserRole(actorId, id, dto.role, {
+      ip: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+  }
+
+  @Patch('users/:id/active')
+  @Roles(Role.SUPER_ADMIN)
+  setUserActive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserActiveDto,
+    @CurrentUser('id') actorId: string,
+    @Req() req: Request,
+  ) {
+    return this.admin.setUserActive(actorId, id, dto.isActive, {
+      ip: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
   }
 }

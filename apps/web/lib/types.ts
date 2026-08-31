@@ -1,4 +1,4 @@
-export type Role = 'PARTICIPANT' | 'ORGANIZER' | 'ADMIN';
+export type Role = 'PARTICIPANT' | 'ORGANIZER' | 'SUPER_ADMIN';
 export type RoundState = 'DRAFT' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'ARCHIVED';
 export type CompetitionState = 'DRAFT' | 'REGISTRATION' | 'LIVE' | 'COMPLETED' | 'ARCHIVED';
 export type RoundType = 'MCQ' | 'CODING';
@@ -164,3 +164,19 @@ export interface SubmissionDetail {
     stderr: string | null;
   }[];
 }
+
+export type RevealMode = 'IMMEDIATE' | 'ON_ROUND_END' | 'NEVER';
+
+/// Discriminated on `revealed`: under ON_ROUND_END and NEVER the correctness keys
+/// are absent from the payload entirely, not merely null.
+export type McqSubmitResponse =
+  | { recorded: true; answeredAt: string; revealed: false }
+  | {
+      recorded: true;
+      answeredAt: string;
+      revealed: true;
+      isCorrect: boolean;
+      correctOptionId: string;
+      explanation: string | null;
+      pointsAwarded: number;
+    };

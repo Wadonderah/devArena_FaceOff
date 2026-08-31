@@ -8,10 +8,14 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+/// Three roles, strictly ordered. SUPER_ADMIN can do everything an ORGANIZER can
+/// plus platform administration (people, roles, audit, system health); ORGANIZER
+/// runs competitions; PARTICIPANT competes. Precedence is declared once in
+/// ROLE_RANK (auth/guards/roles.guard.ts) rather than re-derived per call site.
 enum Role {
   PARTICIPANT
   ORGANIZER
-  ADMIN
+  SUPER_ADMIN
 }
 
 enum CompetitionState {
@@ -28,6 +32,24 @@ enum RoundState {
   LIVE
   COMPLETED
   ARCHIVED
+}
+
+/// When a participant learns whether their MCQ answer was correct.
+/// IMMEDIATE trades some competition integrity for learning value; pair it with
+/// per-participant option shuffling so a revealed answer does not transfer
+/// between participants by option label.
+enum RevealMode {
+  IMMEDIATE
+  ON_ROUND_END
+  NEVER
+}
+
+/// How a round attributes score. INDIVIDUAL is the default so every existing
+/// round keeps its current behaviour.
+enum ParticipationMode {
+  INDIVIDUAL
+  TEAM
+  HYBRID
 }
 
 enum RoundType {
@@ -112,6 +134,8 @@ model User {
   profile            Profile?
   refreshTokens      RefreshToken[]
   verificationTokens VerificationToken[]
+  teamMemberships    TeamMember[]
+  captainOf          Team[]              @relation("TeamCaptain")
   participations     CompetitionParticipant[]
   submissions        Submission[]
   mcqAttempts        MCQAttempt[]
@@ -183,11 +207,17 @@ model Competition {
   registrationOpensAt  DateTime?
   registrationClosesAt DateTime?
 
+  /// Team scores are the sum of member scores, so unequal team sizes would
+  /// advantage larger teams. Capping the size is how an organizer keeps that
+  /// fair; null means uncapped.
+  maxTeamSize Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   rounds       Round[]
   participants CompetitionParticipant[]
+  teams        Team[]
   scoreEvents  ScoreEvent[]
 
   @@index([state])
@@ -208,6 +238,55 @@ model CompetitionParticipant {
   @@map("competition_participants")
 }
 
+model Team {
+  id            String @id @default(uuid()) @db.Uuid
+  competitionId String @db.Uuid
+  name          String
+
+  /// Short human-readable join code. Unique platform-wide so a participant can
+  /// join without also having to identify the competition.
+  code String @unique
+
+  avatarUrl String?
+
+  /// Captaincy is a property of the team, not a platform role. A global
+  /// TEAM_CAPTAIN role would make its holder captain of every team.
+  captainId String @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  competition Competition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  captain     User         @relation("TeamCaptain", fields: [captainId], references: [id])
+  members     TeamMember[]
+  scoreEvents ScoreEvent[]
+
+  @@unique([competitionId, name])
+  @@index([competitionId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id     String @id @default(uuid()) @db.Uuid
+  teamId String @db.Uuid
+  userId String @db.Uuid
+
+  /// Denormalised from the team so the database itself can guarantee one team
+  /// per participant per competition. Enforcing that in service code alone would
+  /// lose the race between two concurrent joins.
+  competitionId String @db.Uuid
+
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@unique([competitionId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
 model Round {
   id            String     @id @default(uuid()) @db.Uuid
   competitionId String     @db.Uuid
@@ -224,6 +303,12 @@ model Round {
   weight Decimal @default(0) @db.Decimal(5, 4)
 
   allowedLanguages Language[] @default([])
+
+  /// Defaults to ON_ROUND_END so existing rounds are unchanged by this migration.
+  revealMode RevealMode @default(ON_ROUND_END)
+
+  /// Defaults to INDIVIDUAL so existing rounds and their score data are unaffected.
+  participationMode ParticipationMode @default(INDIVIDUAL)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -435,7 +520,12 @@ model MCQAttempt {
   round      Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
   scoreEvent ScoreEvent?
 
-  @@unique([userId, questionId])
+  /// Scoped to the round, not just the question. A challenge library is shared
+  /// across competitions, so the same question can legitimately appear in two
+  /// different rounds — a global unique on (userId, questionId) made answering it
+  /// once block it everywhere else forever. This matches the ScoreEvent
+  /// constraint, which was already round-scoped.
+  @@unique([userId, roundId, questionId])
   @@index([roundId, userId])
   @@map("mcq_attempts")
 }

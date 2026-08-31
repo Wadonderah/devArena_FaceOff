@@ -11,7 +11,7 @@ import { AuditService } from '../../audit/audit.service';
 import type { AuthenticatedUser } from '../decorators';
 
 const MUTATING = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
-const STAFF = new Set<Role>([Role.ORGANIZER, Role.ADMIN]);
+const STAFF = new Set<Role>([Role.ORGANIZER, Role.SUPER_ADMIN]);
 
 // Request bodies are recorded for traceability, so anything credential-shaped is
 // stripped before it reaches the audit table.

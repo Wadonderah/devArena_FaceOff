@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 12);
 
   const people: { email: string; displayName: string; role: Role }[] = [
-    { email: 'admin@akwannya-hub.org', displayName: 'Platform Admin', role: Role.ADMIN },
+    { email: 'admin@akwannya-hub.org', displayName: 'Platform Admin', role: Role.SUPER_ADMIN },
     { email: 'organizer@akwannya-hub.org', displayName: 'Competition Organizer', role: Role.ORGANIZER },
     { email: 'ama@example.com', displayName: 'Ama Boateng', role: Role.PARTICIPANT },
     { email: 'kwame@example.com', displayName: 'Kwame Mensah', role: Role.PARTICIPANT },

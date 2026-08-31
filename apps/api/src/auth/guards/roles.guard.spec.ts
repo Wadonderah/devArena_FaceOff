@@ -44,15 +44,27 @@ describe('RolesGuard', () => {
   });
 
   it('treats ADMIN as a superset of ORGANIZER', () => {
-    const user = { id: 'u1', role: Role.ADMIN };
+    const user = { id: 'u1', role: Role.SUPER_ADMIN };
     expect(guardWith({ roles: [Role.ORGANIZER] }).canActivate(contextFor(user))).toBe(true);
   });
 
   it('rejects an organizer reaching an admin-only route', () => {
     const user = { id: 'u1', role: Role.ORGANIZER };
-    expect(() => guardWith({ roles: [Role.ADMIN] }).canActivate(contextFor(user))).toThrow(
+    expect(() => guardWith({ roles: [Role.SUPER_ADMIN] }).canActivate(contextFor(user))).toThrow(
       ForbiddenException,
     );
+  });
+
+  it('lets SUPER_ADMIN through a PARTICIPANT-level requirement', () => {
+    const user = { id: 'u1', role: Role.SUPER_ADMIN };
+    expect(guardWith({ roles: [Role.PARTICIPANT] }).canActivate(contextFor(user))).toBe(true);
+  });
+
+  it('rejects a participant reaching a super admin route', () => {
+    const user = { id: 'u1', role: Role.PARTICIPANT };
+    expect(() =>
+      guardWith({ roles: [Role.SUPER_ADMIN] }).canActivate(contextFor(user)),
+    ).toThrow(ForbiddenException);
   });
 
   it('fails closed when a protected route has no authenticated user', () => {

@@ -10,6 +10,7 @@ import {
 import { Role, RoundState } from '@prisma/client';
 import { UseGuards } from '@nestjs/common';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../common/decorators';
+import { ROLE_RANK } from '../auth/guards/roles.guard';
 import { VerifiedEmailGuard } from '../auth/guards/verified-email.guard';
 import { RoundsService } from './rounds.service';
 import { CreateRoundDto, SetRoundChallengesDto, UpdateRoundDto } from './dto/round.dto';
@@ -32,7 +33,7 @@ export class RoundsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return user.role === Role.ORGANIZER || user.role === Role.ADMIN
+    return ROLE_RANK[user.role] >= ROLE_RANK[Role.ORGANIZER]
       ? this.rounds.findOneForOrganizer(id)
       : this.rounds.findOneForParticipant(id, user.id);
   }
