@@ -6,11 +6,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
 import { Button } from '@/components/ui/button';
-import { CompetitionStateBadge, RoundStateBadge } from '@/components/ui/badge';
-import { SkeletonRows } from '@/components/ui/skeleton';
+import { Badge, CompetitionStateBadge, RoundStateBadge } from '@/components/ui/badge';
+import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
+import { useToast } from '@/components/ui/toast';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Field } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
 import { useCompetition, useCountdown } from '@/lib/hooks';
-import type { RoundSummary } from '@/lib/types';
+import type { RoundSummary, Team } from '@/lib/types';
 
 function RoundCard({
   round,
@@ -35,6 +39,9 @@ function RoundCard({
               Round {round.orderIndex + 1}
             </span>
             <RoundStateBadge state={round.state} />
+            {round.participationMode && round.participationMode !== 'INDIVIDUAL' && (
+              <Badge tone="brand">Team scored</Badge>
+            )}
           </div>
 
           <h3 className="mt-1.5 text-lg">{round.name}</h3>
@@ -77,6 +84,197 @@ function RoundCard({
         </div>
       </div>
     </li>
+  );
+}
+
+interface TeamListItem {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  captainId: string;
+  _count: { members: number };
+}
+
+function TeamPanel({
+  competitionId,
+  joined,
+  maxTeamSize,
+}: {
+  competitionId: string;
+  joined: boolean;
+  maxTeamSize?: number | null;
+}) {
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  const { data: team, isLoading } = useQuery({
+    queryKey: ['my-team', competitionId],
+    queryFn: () => api<Team | null>(`/competitions/${competitionId}/teams/mine`),
+    enabled: joined,
+    retry: false,
+  });
+
+  const { data: allTeams } = useQuery({
+    queryKey: ['teams', competitionId],
+    queryFn: () => api<TeamListItem[]>(`/competitions/${competitionId}/teams`),
+    enabled: joined,
+  });
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['my-team', competitionId] });
+    queryClient.invalidateQueries({ queryKey: ['teams', competitionId] });
+  };
+
+  const fail = (err: unknown, fallback: string) =>
+    toast.error(fallback, err instanceof ApiError ? err.displayMessage : 'Please try again.');
+
+  const create = useMutation({
+    mutationFn: () =>
+      api<Team>(`/competitions/${competitionId}/teams`, { method: 'POST', body: { name } }),
+    onSuccess: (created) => {
+      toast.success(`${created.name} created`, `Share code ${created.code} to invite others.`);
+      setName('');
+      refresh();
+    },
+    onError: (err) => fail(err, 'Could not create the team'),
+  });
+
+  const join = useMutation({
+    mutationFn: (joinCode: string) =>
+      api<Team>('/teams/join', { method: 'POST', body: { code: joinCode } }),
+    onSuccess: (joined_) => {
+      toast.success(`You joined ${joined_.name}`);
+      setCode('');
+      refresh();
+    },
+    onError: (err) => fail(err, 'Could not join that team'),
+  });
+
+  if (!joined) return null;
+  if (isLoading) return <Skeleton className="mb-6 h-32 w-full rounded-[14px]" />;
+
+  // Already in a team: show it, and make the one-team-per-competition rule and
+  // the way out of it both visible. Previously this looked like a dead end.
+  if (team) {
+    return (
+      <section className="panel hairline mb-6 flex flex-wrap items-center justify-between gap-4 p-5">
+        <div className="min-w-0">
+          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
+            Your team
+          </p>
+          <h2 className="mt-1 text-xl">{team.name}</h2>
+          <p className="mt-0.5 text-[13px] text-ink-faint">
+            {team.members.length}
+            {maxTeamSize ? ` of ${maxTeamSize}` : ''} members · code{' '}
+            <span className="font-mono">{team.code}</span>
+          </p>
+          <p className="mt-2 text-[13px] text-ink-dim">
+            You can only be in one team per competition. Leave this one first if you want to
+            switch.
+          </p>
+        </div>
+        <Link href={`/teams/${team.id}`}>
+          <Button variant="secondary">Manage team</Button>
+        </Link>
+      </section>
+    );
+  }
+
+  const teams = allTeams ?? [];
+
+  return (
+    <section className="panel hairline mb-6 p-5">
+      <h2 className="text-lg">Teams</h2>
+      <p className="mt-1 text-[14px] text-ink-dim">
+        Team rounds score through your team, so join one before they start. You can be in one team
+        per competition.
+      </p>
+
+      {teams.length > 0 && (
+        <div className="mt-5">
+          <h3 className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
+            Teams in this competition
+          </h3>
+          <ul className="mt-2.5 grid gap-2 sm:grid-cols-2">
+            {teams.map((t) => {
+              const full = maxTeamSize ? t._count.members >= maxTeamSize : false;
+              return (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface-1 px-3.5 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px]">{t.name}</p>
+                    <p className="text-[12px] text-ink-faint">
+                      {t._count.members}
+                      {maxTeamSize ? ` / ${maxTeamSize}` : ''} members
+                    </p>
+                  </div>
+                  {full ? (
+                    <Badge>Full</Badge>
+                  ) : (
+                    <span className="text-[12px] text-ink-faint">Ask for their code</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2.5 text-[13px] text-ink-faint">
+            Teams are joined by invite code rather than openly, so a captain controls who is on
+            their team.
+          </p>
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-5 border-t border-line pt-5 sm:grid-cols-2">
+        <form
+          className="space-y-2.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            create.mutate();
+          }}
+        >
+          <Field
+            label="Create a team"
+            placeholder="Team name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Button type="submit" size="sm" loading={create.isPending} disabled={!name.trim()}>
+            Create
+          </Button>
+        </form>
+
+        <form
+          className="space-y-2.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            join.mutate(code);
+          }}
+        >
+          <Field
+            label="Join with a code"
+            placeholder="ABC234"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            hint="Case and spacing do not matter."
+          />
+          <Button
+            type="submit"
+            size="sm"
+            variant="secondary"
+            loading={join.isPending}
+            disabled={!code.trim()}
+          >
+            Join
+          </Button>
+        </form>
+      </div>
+    </section>
   );
 }
 
@@ -146,6 +344,12 @@ function CompetitionContent({ id }: { id: string }) {
           You&apos;re registered for this competition.
         </p>
       )}
+
+      <TeamPanel
+        competitionId={id}
+        joined={Boolean(data.joined)}
+        maxTeamSize={data.maxTeamSize}
+      />
 
       <h2 className="mb-3 text-[12px] uppercase tracking-[0.1em] text-ink-faint">Rounds</h2>
 

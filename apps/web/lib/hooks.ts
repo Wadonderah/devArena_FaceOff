@@ -19,7 +19,9 @@ export function useCurrentUser() {
   return useQuery({
     queryKey: ['me'],
     queryFn: () => api<{ user: CurrentUser }>('/auth/me').then((r) => r.user),
-    retry: false,
+    // Deliberately no `retry: false`. The provider's policy already refuses to
+    // retry a 4xx while retrying 5xx and network faults twice — and a dropped
+    // connection or a restarting API must not read as "signed out".
     staleTime: 60_000,
   });
 }

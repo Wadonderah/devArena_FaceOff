@@ -61,7 +61,8 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
           <RoundStateBadge state={round.state} />
         </div>
         <p className="mt-0.5 text-[13px] text-ink-faint">
-          {round.type} · {round._count.challenges} challenges · weight shown in API
+          {round.type} · {round._count.challenges} challenges
+          {round.weight !== undefined && ` · weight ${Number(round.weight).toFixed(2)}`}
         </p>
         {transition.error && (
           <p role="alert" className="mt-1 text-[13px] text-danger">
@@ -140,7 +141,7 @@ function CompetitionAdmin({ competition }: { competition: CompetitionListItem })
 }
 
 function NewCompetitionForm({ onDone }: { onDone: () => void }) {
-  const [form, setForm] = useState({ name: '', slug: '', description: '' });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', maxTeamSize: '' });
 
   const create = useMutation({
     mutationFn: () =>
@@ -150,6 +151,8 @@ function NewCompetitionForm({ onDone }: { onDone: () => void }) {
           name: form.name,
           slug: form.slug,
           ...(form.description ? { description: form.description } : {}),
+          // Blank means uncapped, so send nothing rather than a zero.
+          ...(form.maxTeamSize ? { maxTeamSize: Number(form.maxTeamSize) } : {}),
         },
       }),
     onSuccess: onDone,
@@ -192,6 +195,19 @@ function NewCompetitionForm({ onDone }: { onDone: () => void }) {
         value={form.description}
         onChange={(e) => setForm({ ...form, description: e.target.value })}
       />
+
+      <div className="sm:max-w-[16rem]">
+        <Field
+          label="Max team size"
+          type="number"
+          min={1}
+          max={20}
+          placeholder="Uncapped"
+          hint="Team scores are the sum of member scores, so a cap keeps larger teams from winning on headcount."
+          value={form.maxTeamSize}
+          onChange={(e) => setForm({ ...form, maxTeamSize: e.target.value })}
+        />
+      </div>
 
       {create.error && (
         <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-[14px] text-danger">

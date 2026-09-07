@@ -1,5 +1,11 @@
 import { ForbiddenException } from '@nestjs/common';
-import { Prisma, RevealMode, RoundState, RoundType } from '@prisma/client';
+import {
+  ParticipationMode,
+  Prisma,
+  RevealMode,
+  RoundState,
+  RoundType,
+} from '@prisma/client';
 import { McqService } from './mcq.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { RoundsService } from '../rounds/rounds.service';
@@ -19,6 +25,7 @@ function buildService(revealMode: RevealMode, roundState: RoundState = RoundStat
     weight: new Prisma.Decimal(0.4),
     allowedLanguages: [],
     revealMode,
+    participationMode: ParticipationMode.INDIVIDUAL,
   };
 
   const prisma = {

@@ -1,31 +1,32 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common'
+import { PrismaClient } from '@prisma/client'
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(PrismaService.name);
+    private readonly logger = new Logger(PrismaService.name)
 
-  constructor() {
-    super({
-      log:
-        process.env.NODE_ENV === 'development'
-          ? [{ emit: 'event', level: 'warn' }, { emit: 'event', level: 'error' }]
-          : [{ emit: 'event', level: 'error' }],
-    });
-  }
+    constructor() {
+        super({
+            log:
+                process.env.NODE_ENV === 'development'
+                    ? [
+                        { emit: 'event', level: 'warn' },
+                        { emit: 'event', level: 'error' },
+                    ]
+                    : [{ emit: 'event', level: 'error' }],
+        })
+    }
 
-  async onModuleInit(): Promise<void> {
-    await this.$connect();
-    this.logger.log('Database connection established');
-  }
+    async onModuleInit(): Promise<void> {
+        await this.$connect()
+        this.logger.log('Database connection established')
+    }
 
-  async onModuleDestroy(): Promise<void> {
-    await this.$disconnect();
-  }
+    async onModuleDestroy(): Promise<void> {
+        await this.$disconnect()
+    }
 
-  /// Neon suspends idle compute; a round going LIVE on a cold database costs the
-  /// first participant several hundred milliseconds. Called before a round starts.
-  async warm(): Promise<void> {
-    await this.$queryRaw`SELECT 1`;
-  }
+    async warm(): Promise<void> {
+        await this.$queryRaw`SELECT 1`
+    }
 }

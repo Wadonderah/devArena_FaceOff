@@ -4,7 +4,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, RevealMode, RoundState, RoundType, ScoreSource } from '@prisma/client';
+import {
+  ParticipationMode,
+  Prisma,
+  RevealMode,
+  RoundState,
+  RoundType,
+  ScoreSource,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { relabel, seededShuffle } from '../common/shuffle';
 import { RoundsService } from '../rounds/rounds.service';
@@ -28,6 +35,7 @@ export class McqService {
     }
 
     await this.assertEnrolled(round.competitionId, userId);
+    await this.assertTeamIfRequired(round.competitionId, userId, round.participationMode);
 
     const link = await this.prisma.roundChallenge.findUnique({
       where: { roundId_challengeId: { roundId: dto.roundId, challengeId: dto.challengeId } },
@@ -118,6 +126,7 @@ export class McqService {
         roundMaxPoints: await this.scoring.roundMaxPoints(dto.roundId),
         timeToSolveMs,
         mcqAttemptId: attempt.id,
+        participationMode: round.participationMode,
       });
 
       // The response SHAPE is discriminated rather than widened: under any mode
@@ -221,6 +230,26 @@ export class McqService {
     }));
 
     return { round, attempts: ordered, earned, available };
+  }
+
+  /// A team round scores through the team, so an unteamed participant would
+  /// submit work that lands nowhere. Better to refuse clearly than to silently
+  /// drop their score.
+  private async assertTeamIfRequired(
+    competitionId: string,
+    userId: string,
+    mode: ParticipationMode,
+  ): Promise<void> {
+    if (mode === ParticipationMode.INDIVIDUAL) return;
+
+    const membership = await this.prisma.teamMember.findUnique({
+      where: { competitionId_userId: { competitionId, userId } },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('Join a team before taking part in this round');
+    }
   }
 
   private async assertEnrolled(competitionId: string, userId: string): Promise<void> {

@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  ParticipationMode,
   Prisma,
   RoundType,
   SubmissionKind,
@@ -203,6 +204,17 @@ export class CodeService {
 
     if (!enrolled) {
       throw new ForbiddenException('Join the competition before submitting code');
+    }
+
+    if (round.participationMode !== ParticipationMode.INDIVIDUAL) {
+      const membership = await this.prisma.teamMember.findUnique({
+        where: { competitionId_userId: { competitionId: round.competitionId, userId } },
+        select: { id: true },
+      });
+
+      if (!membership) {
+        throw new ForbiddenException('Join a team before taking part in this round');
+      }
     }
 
     const link = await this.prisma.roundChallenge.findUnique({

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
 import { use, useMemo, useState } from 'react';
@@ -268,6 +269,15 @@ function McqRound({ roundId }: { roundId: string }) {
         )}
       </header>
 
+      {progress && progress.totalQuestions > 0 &&
+        progress.answeredCount >= progress.totalQuestions && (
+          <RoundComplete
+            roundId={roundId}
+            competitionId={round.competitionId}
+            answered={progress.answeredCount}
+          />
+        )}
+
       {progress && (
         <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-surface-2">
           <motion.div
@@ -283,6 +293,57 @@ function McqRound({ roundId }: { roundId: string }) {
 
       <QuestionList roundId={roundId} answeredIds={challengeIds} />
     </>
+  );
+}
+
+/// Shown once every question in the round has been answered. Without it a
+/// participant finishes the last question and is simply left on the page with no
+/// indication they are done or anywhere to go.
+function RoundComplete({
+  roundId,
+  competitionId,
+  answered,
+}: {
+  roundId: string;
+  competitionId: string;
+  answered: number;
+}) {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="panel hairline bracketed mb-6 p-6 text-center"
+      role="status"
+    >
+      <div
+        aria-hidden
+        className="mx-auto grid size-11 place-items-center rounded-full bg-success/15 text-success"
+      >
+        ✓
+      </div>
+
+      <h2 className="mt-4 font-display text-2xl tracking-[-0.02em]">Round complete</h2>
+      <p className="mt-2 text-[15px] text-ink-dim">
+        You answered all {answered} {answered === 1 ? 'question' : 'questions'}. Your score is
+        already counted.
+      </p>
+      <p className="mt-1.5 text-[13px] text-ink-faint">
+        Full results and explanations open when the organizer ends the round.
+      </p>
+
+      <div className="mt-6 flex flex-wrap justify-center gap-2.5">
+        <Link href={`/leaderboard/${competitionId}`}>
+          <Button>View leaderboard</Button>
+        </Link>
+        <Link href={`/competitions/${competitionId}`}>
+          <Button variant="secondary">Back to competition</Button>
+        </Link>
+        <Link href={`/rounds/${roundId}/mcq?view=results`}>
+          <Button variant="ghost">Try results</Button>
+        </Link>
+      </div>
+    </motion.section>
   );
 }
 

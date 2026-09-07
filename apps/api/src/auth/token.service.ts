@@ -18,6 +18,11 @@ export interface IssuedTokens {
   refreshToken: string;
 }
 
+/// How long a just-rotated refresh token keeps working. Long enough to cover
+/// several tabs refreshing at once and a slow round trip; short enough that a
+/// stolen token replayed later is still caught.
+const ROTATION_GRACE_MS = 30_000;
+
 @Injectable()
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
@@ -86,6 +91,25 @@ export class TokenService {
     }
 
     if (stored.revokedAt) {
+      // A browser with several tabs open refreshes from each of them at once.
+      // They all still hold the pre-rotation cookie, so without this every
+      // multi-tab session would look like theft and be destroyed — which is
+      // exactly what was happening in testing.
+      //
+      // Grace applies only to a token retired by a normal rotation, and only for
+      // a few seconds. A replay after that, or of a token revoked by logout or by
+      // a previous theft response, still revokes the family.
+      if (
+        stored.replacedByTokenHash &&
+        stored.user.isActive &&
+        Date.now() - stored.revokedAt.getTime() <= ROTATION_GRACE_MS
+      ) {
+        this.logger.debug(
+          `Refresh replay inside the rotation grace window for user ${stored.userId}`,
+        );
+        return this.issue(stored.user, stored.familyId);
+      }
+
       await this.revokeFamily(stored.familyId);
       this.logger.warn(
         `Refresh token reuse detected for user ${stored.userId}; family ${stored.familyId} revoked`,
@@ -95,7 +119,10 @@ export class TokenService {
         action: 'auth.refresh_token.reuse_detected',
         entityType: 'RefreshToken',
         entityId: stored.id,
-        metadata: { familyId: stored.familyId },
+        metadata: {
+          familyId: stored.familyId,
+          secondsSinceRevocation: Math.round((Date.now() - stored.revokedAt.getTime()) / 1000),
+        },
       });
       throw new UnauthorizedException('Invalid session');
     }
@@ -108,12 +135,17 @@ export class TokenService {
       throw new UnauthorizedException('Account is disabled');
     }
 
+    const replacement = await this.issue(stored.user, stored.familyId);
+
     await this.prisma.refreshToken.update({
       where: { id: stored.id },
-      data: { revokedAt: new Date() },
+      data: {
+        revokedAt: new Date(),
+        replacedByTokenHash: TokenService.hash(replacement.refreshToken),
+      },
     });
 
-    return this.issue(stored.user, stored.familyId);
+    return replacement;
   }
 
   async revoke(presentedToken: string): Promise<void> {

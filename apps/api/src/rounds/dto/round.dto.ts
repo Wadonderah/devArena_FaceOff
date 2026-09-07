@@ -13,7 +13,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { Language, RevealMode, RoundType } from '@prisma/client';
+import { Language, ParticipationMode, RevealMode, RoundType } from '@prisma/client';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -61,6 +61,10 @@ export class CreateRoundDto {
   @IsOptional()
   @IsEnum(RevealMode)
   revealMode?: RevealMode;
+
+  @IsOptional()
+  @IsEnum(ParticipationMode)
+  participationMode?: ParticipationMode;
 }
 
 export class UpdateRoundDto {
@@ -100,6 +104,10 @@ export class UpdateRoundDto {
   @IsOptional()
   @IsEnum(RevealMode)
   revealMode?: RevealMode;
+
+  @IsOptional()
+  @IsEnum(ParticipationMode)
+  participationMode?: ParticipationMode;
 }
 
 export class SetRoundChallengesDto {

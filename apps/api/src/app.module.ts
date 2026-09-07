@@ -8,6 +8,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { CompetitionsModule } from './competitions/competitions.module';
+import { TeamsModule } from './teams/teams.module';
 import { RoundsModule } from './rounds/rounds.module';
 import { ChallengesModule } from './challenges/challenges.module';
 import { ScoringModule } from './scoring/scoring.module';
@@ -42,6 +43,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     AuthModule,
     UsersModule,
     CompetitionsModule,
+    TeamsModule,
     RoundsModule,
     ChallengesModule,
     LeaderboardModule,

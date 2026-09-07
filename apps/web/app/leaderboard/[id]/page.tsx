@@ -1,13 +1,15 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { use, useEffect, useRef } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
 import { CompetitionStateBadge } from '@/components/ui/badge';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { useCurrentUser, useLeaderboard } from '@/lib/hooks';
-import type { LeaderboardRow } from '@/lib/types';
+import type { LeaderboardRow, TeamLeaderboard } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
 function formatTime(ms: number): string {
@@ -34,7 +36,73 @@ function RankDelta({ delta }: { delta: number | undefined }) {
   );
 }
 
+function TeamBoard({ competitionId }: { competitionId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['leaderboard-teams', competitionId],
+    queryFn: () => api<TeamLeaderboard>(`/leaderboard/${competitionId}/teams`),
+    refetchInterval: 3000,
+    refetchIntervalInBackground: false,
+  });
+
+  if (isLoading) return <SkeletonRows rows={5} />;
+  if (!data) return null;
+
+  if (data.rows.length === 0) {
+    return (
+      <div className="panel p-10 text-center text-[14px] text-ink-dim">
+        No teams have been created for this competition yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel hairline overflow-hidden">
+      <div className="grid grid-cols-[3rem_1fr_5rem_5.5rem_6rem] gap-3 border-b border-line px-4 py-2.5 text-[11px] uppercase tracking-[0.08em] text-ink-faint sm:px-5">
+        <span>Rank</span>
+        <span>Team</span>
+        <span className="text-right">Members</span>
+        <span className="text-right">Solved</span>
+        <span className="text-right">Score</span>
+      </div>
+
+      <ul>
+        {data.rows.map((row) => (
+          <li
+            key={row.teamId}
+            className="grid grid-cols-[3rem_1fr_5rem_5.5rem_6rem] items-center gap-3 border-b border-line/60 px-4 py-3 last:border-0 sm:px-5"
+          >
+            <span
+              className={cn(
+                'tabular font-display text-lg',
+                row.rank === 1 && 'text-warn',
+                row.rank === 2 && 'text-ink-dim',
+                row.rank === 3 && 'text-live',
+              )}
+            >
+              {row.rank}
+            </span>
+            <span className="min-w-0 truncate text-[15px]">
+              {row.name}
+              <span className="block text-[12px] text-ink-faint">
+                {formatTime(row.totalTimeMs)}
+              </span>
+            </span>
+            <span className="tabular text-right text-[15px] text-ink-dim">{row.memberCount}</span>
+            <span className="tabular text-right text-[15px] text-ink-dim">
+              {row.completedChallenges}
+            </span>
+            <span className="tabular text-right font-mono text-[15px]">
+              {row.finalScore.toFixed(4)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Board({ competitionId }: { competitionId: string }) {
+  const [view, setView] = useState<'individual' | 'teams'>('individual');
   const { data, isLoading } = useLeaderboard(competitionId);
   const { data: me } = useCurrentUser();
   const reduceMotion = useReducedMotion();
@@ -73,11 +141,35 @@ function Board({ competitionId }: { competitionId: string }) {
           <p className="mt-1.5 text-[15px] text-ink-dim">{data.competition.name}</p>
         </div>
 
-        <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-          <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-success" />
-          Updating every 3 seconds
-        </p>
+        <div className="flex flex-col items-end gap-2">
+          <div
+            role="group"
+            aria-label="Leaderboard view"
+            className="inline-flex rounded-lg border border-line bg-surface-1 p-0.5"
+          >
+            {(['individual', 'teams'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={view === mode}
+                onClick={() => setView(mode)}
+                className={cn(
+                  'rounded-[7px] px-3 py-1.5 text-[13px] capitalize transition-colors duration-150',
+                  view === mode ? 'bg-surface-3 text-ink' : 'text-ink-dim hover:text-ink',
+                )}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+            <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-success" />
+            Updating every 3 seconds
+          </p>
+        </div>
       </header>
+
+      {view === 'teams' && <TeamBoard competitionId={competitionId} />}
 
       {/* Live region announces only the viewer's own position, so a screen
           reader is not read the entire board on every poll. */}
@@ -88,7 +180,7 @@ function Board({ competitionId }: { competitionId: string }) {
         })()}
       </p>
 
-      <div className="panel hairline overflow-hidden">
+      <div className={cn('panel hairline overflow-hidden', view === 'teams' && 'hidden')}>
         <div className="grid grid-cols-[3rem_1fr_4rem_5.5rem_6rem] gap-3 border-b border-line px-4 py-2.5 text-[11px] uppercase tracking-[0.08em] text-ink-faint sm:px-5">
           <span>Rank</span>
           <span>Participant</span>

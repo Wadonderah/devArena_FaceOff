@@ -86,13 +86,15 @@ describe('TokenService', () => {
       await expect(service.rotate('bogus')).rejects.toThrow(UnauthorizedException);
     });
 
-    it('revokes the whole family when an already-rotated token is replayed', async () => {
+    it('revokes the whole family when an already-rotated token is replayed later', async () => {
       const prisma = makePrisma({
         id: 'rt-1',
         userId: user.id,
         familyId: 'family-1',
         expiresAt: future(),
-        revokedAt: new Date(),
+        // Rotated well outside the grace window.
+        revokedAt: new Date(Date.now() - 5 * 60_000),
+        replacedByTokenHash: 'some-hash',
         user,
       });
       const service = new TokenService(jwt, prisma.asPrisma, config, audit);
@@ -102,6 +104,89 @@ describe('TokenService', () => {
       expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
         where: { familyId: 'family-1', revokedAt: null },
         data: { revokedAt: expect.any(Date) },
+      });
+    });
+
+    describe('rotation grace window', () => {
+      // Several browser tabs refresh at once, each still holding the token that
+      // the first one rotated away. Without grace this looked like theft and
+      // destroyed the session — the cause of the mid-session sign-outs.
+      const justRotated = (over: Record<string, unknown> = {}) => ({
+        id: 'rt-1',
+        userId: user.id,
+        familyId: 'family-1',
+        expiresAt: future(),
+        revokedAt: new Date(Date.now() - 2_000),
+        replacedByTokenHash: 'hash-of-the-replacement',
+        user,
+        ...over,
+      });
+
+      it('issues a working session for a replay inside the window', async () => {
+        const prisma = makePrisma(justRotated());
+        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+        const issued = await service.rotate('same-token-from-another-tab');
+
+        expect(issued.accessToken).toBeTruthy();
+        expect(issued.refreshToken).toBeTruthy();
+      });
+
+      it('does not revoke the family for a replay inside the window', async () => {
+        const prisma = makePrisma(justRotated());
+        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+        await service.rotate('same-token-from-another-tab');
+
+        expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('keeps the replay in the same family', async () => {
+        const prisma = makePrisma(justRotated());
+        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+        await service.rotate('same-token-from-another-tab');
+
+        expect(createdData(prisma.refreshToken.create).familyId).toBe('family-1');
+      });
+
+      it('refuses grace to a token revoked by logout rather than rotation', async () => {
+        // No replacement recorded means it was revoked deliberately, so a replay
+        // is not a racing tab — grace must not resurrect a signed-out session.
+        const prisma = makePrisma(justRotated({ replacedByTokenHash: null }));
+        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+        await expect(service.rotate('logged-out-token')).rejects.toThrow(UnauthorizedException);
+        expect(prisma.refreshToken.updateMany).toHaveBeenCalled();
+      });
+
+      it('refuses grace to a deactivated account', async () => {
+        const prisma = makePrisma(justRotated({ user: { ...user, isActive: false } }));
+        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+        await expect(service.rotate('token')).rejects.toThrow(UnauthorizedException);
+      });
+    });
+
+    it('records the replacement hash so a rotation is distinguishable from a revocation', async () => {
+      const prisma = makePrisma({
+        id: 'rt-1',
+        userId: user.id,
+        familyId: 'family-1',
+        expiresAt: future(),
+        revokedAt: null,
+        user,
+      });
+      const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+      const issued = await service.rotate('valid');
+
+      expect(prisma.refreshToken.update).toHaveBeenCalledWith({
+        where: { id: 'rt-1' },
+        data: {
+          revokedAt: expect.any(Date),
+          replacedByTokenHash: TokenService.hash(issued.refreshToken),
+        },
       });
     });
 
@@ -149,7 +234,7 @@ describe('TokenService', () => {
 
       expect(prisma.refreshToken.update).toHaveBeenCalledWith({
         where: { id: 'rt-1' },
-        data: { revokedAt: expect.any(Date) },
+        data: expect.objectContaining({ revokedAt: expect.any(Date) }),
       });
       expect(createdData(prisma.refreshToken.create).familyId).toBe('family-1');
       expect(issued.accessToken).toBeTruthy();

@@ -40,6 +40,7 @@ function NewRoundForm({ competitionId, onDone }: { competitionId: string; onDone
     orderIndex: 0,
     weight: 0.5,
     revealMode: 'ON_ROUND_END',
+    participationMode: 'INDIVIDUAL',
   });
 
   const create = useMutation({
@@ -53,6 +54,7 @@ function NewRoundForm({ competitionId, onDone }: { competitionId: string; onDone
           orderIndex: Number(form.orderIndex),
           weight: Number(form.weight),
           revealMode: form.revealMode,
+          participationMode: form.participationMode,
           ...(form.type === 'CODING'
             ? { allowedLanguages: ['PYTHON', 'JAVASCRIPT'] }
             : {}),
@@ -83,7 +85,7 @@ function NewRoundForm({ competitionId, onDone }: { competitionId: string; onDone
         onChange={(e) => setForm({ ...form, description: e.target.value })}
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <SelectField
           label="Type"
           options={[
@@ -92,6 +94,21 @@ function NewRoundForm({ competitionId, onDone }: { competitionId: string; onDone
           ]}
           value={form.type}
           onChange={(e) => setForm({ ...form, type: e.target.value })}
+        />
+        <SelectField
+          label="Scored as"
+          options={[
+            { value: 'INDIVIDUAL', label: 'Individual' },
+            { value: 'TEAM', label: 'Team' },
+            { value: 'HYBRID', label: 'Both' },
+          ]}
+          hint={
+            form.participationMode === 'INDIVIDUAL'
+              ? 'Each participant scores for themselves.'
+              : 'Participants must be in a team to take part.'
+          }
+          value={form.participationMode}
+          onChange={(e) => setForm({ ...form, participationMode: e.target.value })}
         />
         <Field
           label="Order"
@@ -244,6 +261,11 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
             <span className="text-[15px]">{round.name}</span>
             <RoundStateBadge state={round.state} />
             <Badge>{round.type}</Badge>
+            {round.participationMode && round.participationMode !== 'INDIVIDUAL' && (
+              <Badge tone="brand">
+                {round.participationMode === 'TEAM' ? 'Team scored' : 'Team + individual'}
+              </Badge>
+            )}
           </div>
           <p className="mt-0.5 text-[13px] text-ink-faint">
             {round._count.challenges} challenges · order {round.orderIndex}

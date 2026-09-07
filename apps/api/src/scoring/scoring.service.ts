@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, ScoreSource } from '@prisma/client';
+import { ParticipationMode, Prisma, ScoreSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
 import { weightedContribution } from './scoring';
@@ -17,6 +17,7 @@ export interface RecordScoreInput {
   timeToSolveMs: number | null;
   submissionId?: string;
   mcqAttemptId?: string;
+  participationMode?: ParticipationMode;
 }
 
 @Injectable()
@@ -47,8 +48,16 @@ export class ScoringService {
       input.roundWeight,
     );
 
+    // Resolved here rather than passed in, so every caller attributes team score
+    // the same way and none can forget.
+    const teamId =
+      input.participationMode && input.participationMode !== ParticipationMode.INDIVIDUAL
+        ? await this.teamIdFor(input.competitionId, input.userId)
+        : null;
+
     const data = {
       competitionId: input.competitionId,
+      teamId,
       roundId: input.roundId,
       userId: input.userId,
       challengeId: input.challengeId,
@@ -78,6 +87,15 @@ export class ScoringService {
     this.leaderboard.invalidate(input.competitionId);
 
     return event;
+  }
+
+  private async teamIdFor(competitionId: string, userId: string): Promise<string | null> {
+    const membership = await this.prisma.teamMember.findUnique({
+      where: { competitionId_userId: { competitionId, userId } },
+      select: { teamId: true },
+    });
+
+    return membership?.teamId ?? null;
   }
 
   async bestExisting(userId: string, roundId: string, challengeId: string) {

@@ -30,7 +30,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#080b14',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f4f6fb' },
+    { media: '(prefers-color-scheme: dark)', color: '#0b1020' },
+  ],
   width: 'device-width',
   initialScale: 1,
 };
@@ -39,8 +42,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
+      // Dark is the default so server-rendered markup has a definite theme; the
+      // script below corrects it before paint if the visitor prefers otherwise.
+      data-theme="dark"
       className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrains.variable}`}
+      suppressHydrationWarning
     >
+      <head>
+        {/*
+          Runs before first paint, so a light-mode visitor never sees a dark flash.
+          It has to be inline and blocking: any deferred script, including React
+          hydration, happens after the browser has already painted.
+
+          Kept deliberately tiny and dependency-free, and mirrors resolve() in
+          components/theme-toggle.tsx — if one changes, so must the other.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('faceoff-theme')||'system';var d=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;document.documentElement.dataset.theme=d}catch(e){}})()`,
+          }}
+        />
+      </head>
       <body>
         <a
           href="#main"

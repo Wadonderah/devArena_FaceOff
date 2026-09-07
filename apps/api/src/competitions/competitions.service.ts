@@ -35,6 +35,7 @@ export class CompetitionsService {
         registrationClosesAt: dto.registrationClosesAt
           ? new Date(dto.registrationClosesAt)
           : null,
+        maxTeamSize: dto.maxTeamSize,
       },
     });
   }
@@ -60,6 +61,7 @@ export class CompetitionsService {
         registrationClosesAt: dto.registrationClosesAt
           ? new Date(dto.registrationClosesAt)
           : undefined,
+        maxTeamSize: dto.maxTeamSize,
       },
     });
   }
@@ -100,6 +102,9 @@ export class CompetitionsService {
         state: true,
         registrationOpensAt: true,
         registrationClosesAt: true,
+        // Not sensitive, and the team panel needs it to show "n of N members"
+        // and to tell someone a team is full before they try to join it.
+        maxTeamSize: true,
         rounds: {
           where: { state: { in: PARTICIPANT_ROUND_STATES } },
           orderBy: { orderIndex: 'asc' },
@@ -113,6 +118,9 @@ export class CompetitionsService {
             startsAt: true,
             endsAt: true,
             allowedLanguages: true,
+            // A participant needs to know a round scores through their team
+            // before it starts, not when their submission is refused.
+            participationMode: true,
             _count: { select: { challenges: true } },
           },
         },

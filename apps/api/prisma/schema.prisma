@@ -175,6 +175,12 @@ model RefreshToken {
   revokedAt DateTime?
   createdAt DateTime  @default(now())
 
+  /// Set only when this token was retired by a normal rotation. It distinguishes
+  /// "revoked because it was replaced" from "revoked by logout, or by the theft
+  /// response" — only the former is eligible for the rotation grace window, so a
+  /// genuinely revoked family can never be resurrected by a late replay.
+  replacedByTokenHash String?
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, familyId])
@@ -540,6 +546,10 @@ model ScoreEvent {
   challengeId   String      @db.Uuid
   source        ScoreSource
 
+  /// Set when the round is TEAM or HYBRID. Nullable so every existing row stays
+  /// valid and INDIVIDUAL rounds are unaffected by this migration.
+  teamId        String?     @db.Uuid
+
   rawScore      Decimal @db.Decimal(10, 4)
   maxRawScore   Decimal @db.Decimal(10, 4)
   roundWeight   Decimal @db.Decimal(5, 4)
@@ -560,7 +570,10 @@ model ScoreEvent {
   submission  Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
   mcqAttempt  MCQAttempt? @relation(fields: [mcqAttemptId], references: [id], onDelete: SetNull)
 
+  team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
   @@unique([userId, roundId, challengeId])
+  @@index([competitionId, teamId])
   @@index([competitionId, userId])
   @@index([roundId])
   @@map("score_events")

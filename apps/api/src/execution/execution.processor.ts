@@ -2,6 +2,7 @@ import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import {
   ExecutionOutcome,
+  ParticipationMode,
   Prisma,
   ScoreSource,
   SubmissionStatus,
@@ -58,7 +59,13 @@ export class ExecutionProcessor extends WorkerHost {
           },
         },
         round: {
-          select: { id: true, competitionId: true, weight: true, startsAt: true },
+          select: {
+            id: true,
+            competitionId: true,
+            weight: true,
+            startsAt: true,
+            participationMode: true,
+          },
         },
       },
     });
@@ -170,6 +177,7 @@ export class ExecutionProcessor extends WorkerHost {
         competitionId: string;
         weight: Prisma.Decimal;
         startsAt: Date | null;
+        participationMode: ParticipationMode;
       };
     },
     rawScore: number,
@@ -202,6 +210,7 @@ export class ExecutionProcessor extends WorkerHost {
       roundMaxPoints: await this.scoring.roundMaxPoints(submission.round.id),
       timeToSolveMs,
       submissionId: submission.id,
+      participationMode: submission.round.participationMode,
     });
   }
 

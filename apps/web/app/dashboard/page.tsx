@@ -6,6 +6,7 @@ import { Shell } from '@/components/shell';
 import { RoundStateBadge, CompetitionStateBadge, Badge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { TeamCard } from '@/components/team-card';
 import { useCompetitions, useCurrentUser, useProfile } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
 
@@ -114,7 +115,10 @@ function DashboardContent() {
       {isLoading ? (
         <SkeletonRows rows={3} />
       ) : active ? (
-        <CurrentCompetition id={active.id} />
+        <div className="space-y-4">
+          <TeamCard competitionId={active.id} />
+          <CurrentCompetition id={active.id} />
+        </div>
       ) : (
         <div className="panel p-10 text-center">
           <h2 className="text-lg">No active competition</h2>

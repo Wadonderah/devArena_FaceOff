@@ -42,6 +42,9 @@ export interface RoundSummary {
   startsAt: string | null;
   endsAt: string | null;
   allowedLanguages: Language[];
+  revealMode?: RevealMode;
+  participationMode?: ParticipationMode;
+  weight?: string | number;
   _count: { challenges: number };
 }
 
@@ -53,6 +56,7 @@ export interface Competition {
   state: CompetitionState;
   registrationOpensAt: string | null;
   registrationClosesAt: string | null;
+  maxTeamSize?: number | null;
   rounds: RoundSummary[];
   joined?: boolean;
 }
@@ -180,3 +184,42 @@ export type McqSubmitResponse =
       explanation: string | null;
       pointsAwarded: number;
     };
+
+export type ParticipationMode = 'INDIVIDUAL' | 'TEAM' | 'HYBRID';
+
+export interface TeamMemberSummary {
+  userId: string;
+  joinedAt: string;
+  user: {
+    id: string;
+    profile: { displayName: string; country: string | null; avatarUrl: string | null } | null;
+  };
+}
+
+export interface Team {
+  id: string;
+  competitionId: string;
+  name: string;
+  code: string;
+  avatarUrl: string | null;
+  captainId: string;
+  createdAt: string;
+  members: TeamMemberSummary[];
+}
+
+export interface TeamLeaderboardRow {
+  rank: number;
+  teamId: string;
+  name: string;
+  memberCount: number;
+  finalScore: number;
+  completedChallenges: number;
+  totalTimeMs: number;
+  lastScoredAt: string | null;
+}
+
+export interface TeamLeaderboard {
+  competition: { id: string; name: string; state: CompetitionState };
+  rows: TeamLeaderboardRow[];
+  generatedAt: string;
+}

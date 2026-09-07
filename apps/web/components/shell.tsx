@@ -3,8 +3,12 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/cn';
-import { useCurrentUser, useLogout } from '@/lib/hooks';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { useCompetitions, useCurrentUser, useLogout } from '@/lib/hooks';
+import type { Team } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -20,8 +24,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const isStaff = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
+  // Surface the participant's team in the header so it is reachable from
+  // anywhere, rather than only by navigating through Competitions.
+  const { data: competitions } = useCompetitions();
+  const active = competitions?.find((c) => c.state === 'LIVE' || c.state === 'REGISTRATION');
+
+  const { data: myTeam } = useQuery({
+    queryKey: ['my-team', active?.id],
+    queryFn: () => api<Team | null>(`/competitions/${active!.id}/teams/mine`),
+    enabled: Boolean(active && user && !isStaff),
+    retry: false,
+  });
+
   const links = [
     ...NAV,
+    ...(myTeam ? [{ href: `/teams/${myTeam.id}`, label: 'My team' }] : []),
     ...(isStaff ? [{ href: '/admin', label: 'Organizer' }] : []),
     ...(isSuperAdmin ? [{ href: '/admin/system', label: 'System' }] : []),
   ];
@@ -67,6 +84,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             {user && (
               <span className="hidden text-[13px] text-ink-faint sm:inline">{user.email}</span>
             )}
+            <ThemeToggle />
             <Button
               size="sm"
               variant="ghost"

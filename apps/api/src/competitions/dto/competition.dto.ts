@@ -1,5 +1,8 @@
 import { Transform } from 'class-transformer';
 import {
+  IsInt,
+  Max,
+  Min,
   IsDateString,
   IsEnum,
   IsOptional,
@@ -41,6 +44,12 @@ export class CreateCompetitionDto {
   @IsOptional()
   @IsDateString()
   registrationClosesAt?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  maxTeamSize?: number;
 }
 
 export class UpdateCompetitionDto {
@@ -68,4 +77,10 @@ export class UpdateCompetitionDto {
   @IsOptional()
   @IsDateString()
   registrationClosesAt?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  maxTeamSize?: number;
 }
