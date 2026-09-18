@@ -100,6 +100,7 @@ function TeamView({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
   const [pendingRemoval, setPendingRemoval] = useState<TeamMemberSummary | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmDisband, setConfirmDisband] = useState(false);
 
   const { data: team, isLoading, error } = useQuery({
     queryKey: ['team', id],
@@ -120,7 +121,20 @@ function TeamView({ id }: { id: string }) {
         result.disbanded ? 'You were the last member.' : 'You can now join or create another.',
       );
       setConfirmLeave(false);
-      router.push(team ? `/competitions/${team.competitionId}` : '/dashboard');
+
+      // Same reason as disband: a lone captain's "Disband team" button routes
+      // through here, so without this the competition page still lists a team
+      // that no longer exists.
+      const competitionId = team?.competitionId;
+      queryClient.removeQueries({ queryKey: ['team', id] });
+      queryClient.invalidateQueries({ queryKey: ['my-team'] });
+      if (competitionId) {
+        queryClient.invalidateQueries({ queryKey: ['competition', competitionId] });
+        queryClient.invalidateQueries({ queryKey: ['teams', competitionId] });
+        queryClient.invalidateQueries({ queryKey: ['leaderboard-teams', competitionId] });
+      }
+
+      router.push(competitionId ? `/competitions/${competitionId}` : '/dashboard');
     },
     onError: (err) => {
       setConfirmLeave(false);
@@ -153,6 +167,29 @@ function TeamView({ id }: { id: string }) {
       refresh();
     },
     onError: (err) => toast.error('Could not transfer captaincy', message(err, 'Please try again.')),
+  });
+
+  const disband = useMutation({
+    mutationFn: () => api(`/teams/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Team disbanded', 'Everyone keeps the points they earned.');
+
+      // Invalidate BEFORE navigating, or the competition page renders a cached
+      // team that no longer exists — which looked like "you must refresh to see
+      // it is gone". The team query is removed rather than refetched: refetching
+      // a deleted team just 404s.
+      const competitionId = team?.competitionId;
+      queryClient.removeQueries({ queryKey: ['team', id] });
+      queryClient.invalidateQueries({ queryKey: ['my-team'] });
+      if (competitionId) {
+        queryClient.invalidateQueries({ queryKey: ['competition', competitionId] });
+        queryClient.invalidateQueries({ queryKey: ['teams', competitionId] });
+        queryClient.invalidateQueries({ queryKey: ['leaderboard-teams', competitionId] });
+      }
+
+      router.push(competitionId ? `/competitions/${competitionId}` : '/dashboard');
+    },
+    onError: (err) => toast.error('Could not disband the team', message(err, 'Please try again.')),
   });
 
   if (isLoading) return <SkeletonRows rows={4} />;
@@ -191,7 +228,27 @@ function TeamView({ id }: { id: string }) {
           <Link href={`/leaderboard/${team.competitionId}`}>
             <Button variant="secondary">Leaderboard</Button>
           </Link>
-          {isMember && (
+          {/* A lone captain leaving IS a disband, so say so — searching for
+              "delete" and finding only "leave" reads as no option at all. */}
+          {isMember && isCaptain && team.members.length === 1 && (
+            <Button variant="danger" onClick={() => setConfirmLeave(true)}>
+              Disband team
+            </Button>
+          )}
+
+          {/* A captain with members gets both: step out, or end the team. */}
+          {isMember && isCaptain && team.members.length > 1 && (
+            <>
+              <Button variant="secondary" onClick={() => setConfirmLeave(true)}>
+                Leave team
+              </Button>
+              <Button variant="danger" onClick={() => setConfirmDisband(true)}>
+                Disband team
+              </Button>
+            </>
+          )}
+
+          {isMember && !isCaptain && (
             <Button variant="danger" onClick={() => setConfirmLeave(true)}>
               Leave team
             </Button>
@@ -265,16 +322,26 @@ function TeamView({ id }: { id: string }) {
 
       <ConfirmDialog
         open={confirmLeave}
-        title={team.members.length === 1 ? 'Leave and disband the team?' : 'Leave this team?'}
+        title={team.members.length === 1 ? `Disband ${team.name}?` : 'Leave this team?'}
         description={
           team.members.length === 1
-            ? `You are the last member, so ${team.name} will be disbanded. Points you have already scored are kept.`
+            ? `You are the last member, so the team will be removed. Points you have already scored are kept.`
             : `You will leave ${team.name}. Points you have already scored are kept, and you can join another team afterwards.`
         }
-        confirmLabel={team.members.length === 1 ? 'Leave and disband' : 'Leave team'}
+        confirmLabel={team.members.length === 1 ? 'Disband team' : 'Leave team'}
         loading={leave.isPending}
         onConfirm={() => leave.mutate()}
         onCancel={() => setConfirmLeave(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmDisband}
+        title={`Disband ${team.name}?`}
+        description={`This removes the team and its ${team.members.length} members. Everyone keeps the points they have already scored — only the team itself goes.`}
+        confirmLabel="Disband team"
+        loading={disband.isPending}
+        onConfirm={() => disband.mutate()}
+        onCancel={() => setConfirmDisband(false)}
       />
     </>
   );

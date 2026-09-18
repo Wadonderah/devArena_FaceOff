@@ -16,6 +16,49 @@ describe('gradeMcq', () => {
   });
 });
 
+describe('gradeMcq with negative marking', () => {
+  it('still awards full points for a correct answer', () => {
+    expect(gradeMcq(true, 10, 3)).toBe(10);
+  });
+
+  it('deducts the penalty for a wrong answer', () => {
+    expect(gradeMcq(false, 10, 3)).toBe(-3);
+  });
+
+  it('never deducts more than the question was worth', () => {
+    // Otherwise one wrong guess could cost more than three correct answers earn.
+    expect(gradeMcq(false, 10, 25)).toBe(-10);
+  });
+
+  it('treats a negative penalty value as its magnitude', () => {
+    // An organizer typing -3 means "penalise 3", not "award 3".
+    expect(gradeMcq(false, 10, -3)).toBe(-3);
+  });
+
+  it('is unchanged when no penalty is configured', () => {
+    expect(gradeMcq(false, 10)).toBe(0);
+    expect(gradeMcq(false, 10, 0)).toBe(0);
+  });
+
+  it('returns positive zero, never negative zero', () => {
+    // -0 survives into JSON and the database and reads as a bug to anyone
+    // looking at a score row.
+    expect(Object.is(gradeMcq(false, 10, 0), 0)).toBe(true);
+  });
+});
+
+describe('normalizeRound with penalties', () => {
+  it('floors a negative round total at zero', () => {
+    // A participant who guessed badly should score nothing for the round, not
+    // drag down what they earned in other rounds.
+    expect(normalizeRound(-15, 50)).toBe(0);
+  });
+
+  it('still caps at one', () => {
+    expect(normalizeRound(60, 50)).toBe(1);
+  });
+});
+
 describe('gradeCoding', () => {
   it('awards full points when every test passes', () => {
     expect(gradeCoding(4, 4, 20)).toBe(20);

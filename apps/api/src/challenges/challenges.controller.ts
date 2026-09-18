@@ -16,6 +16,7 @@ import { VerifiedEmailGuard } from '../auth/guards/verified-email.guard';
 import { ChallengesService } from './challenges.service';
 import {
   CreateCodingChallengeDto,
+  CreateDebuggingChallengeDto,
   CreateMCQChallengeDto,
   PublishChallengeDto,
 } from './dto/challenge.dto';
@@ -61,6 +62,12 @@ export class ChallengesController {
   @Roles(Role.ORGANIZER)
   createCoding(@Body() dto: CreateCodingChallengeDto) {
     return this.challenges.createCoding(dto);
+  }
+
+  @Post('debugging')
+  @Roles(Role.ORGANIZER)
+  createDebugging(@Body() dto: CreateDebuggingChallengeDto) {
+    return this.challenges.createDebugging(dto);
   }
 
   @Patch(':id/publish')

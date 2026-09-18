@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
-import { Shell } from '@/components/shell';
+import { ConsoleShell } from '@/components/console-shell';
 import { Button } from '@/components/ui/button';
 import { CompetitionStateBadge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
@@ -11,24 +11,9 @@ import { Field } from '@/components/ui/input';
 import { TextAreaField } from '@/components/ui/textarea';
 import { useState } from 'react';
 import { api, ApiError, apiUrl } from '@/lib/api';
-import type { CompetitionListItem, RoundState, RoundSummary } from '@/lib/types';
-
-interface Overview {
-  competitions: number;
-  participants: number;
-  submissions: number;
-  pendingSubmissions: number;
-  failedSubmissions: number;
-}
-
-// The transition each state can move to, mirroring the server's state machine.
-// The server is authoritative — this only avoids offering a button that would 409.
-const NEXT_ACTION: Partial<Record<RoundState, { path: string; label: string }>> = {
-  DRAFT: { path: 'schedule', label: 'Schedule' },
-  SCHEDULED: { path: 'start', label: 'Start round' },
-  LIVE: { path: 'end', label: 'End round' },
-  COMPLETED: { path: 'archive', label: 'Archive' },
-};
+import type { CompetitionListItem, Overview, RoundSummary } from '@/lib/types';
+import { ROUND_ACTIONS, TRANSITION_TOAST } from '@/lib/round-actions';
+import { useToast } from '@/components/ui/toast';
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: 'warn' | 'danger' }) {
   return (
@@ -46,11 +31,25 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'wa
 }
 
 function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => void }) {
-  const action = NEXT_ACTION[round.state];
+  const actions = ROUND_ACTIONS[round.state] ?? [];
+  const toast = useToast();
+
+  // Tracked so only the button that was pressed shows a spinner — with two
+  // actions in a row, a shared `isPending` lights up both.
+  const [pending, setPending] = useState<string | null>(null);
 
   const transition = useMutation({
     mutationFn: (path: string) => api(`/rounds/${round.id}/${path}`, { method: 'POST' }),
-    onSuccess: onChanged,
+    onSuccess: (_data, path) => {
+      toast.success(TRANSITION_TOAST[path] ?? 'Round updated', round.name);
+      onChanged();
+    },
+    onError: (error) =>
+      toast.error(
+        'Could not update the round',
+        error instanceof ApiError ? error.displayMessage : undefined,
+      ),
+    onSettled: () => setPending(null),
   });
 
   return (
@@ -73,15 +72,24 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
         )}
       </div>
 
-      {action && (
-        <Button
-          size="sm"
-          variant={round.state === 'LIVE' ? 'danger' : 'primary'}
-          loading={transition.isPending}
-          onClick={() => transition.mutate(action.path)}
-        >
-          {action.label}
-        </Button>
+      {actions.length > 0 && (
+        <div className="flex gap-2">
+          {actions.map((action) => (
+            <Button
+              key={action.path}
+              size="sm"
+              variant={action.variant ?? 'primary'}
+              loading={pending === action.path}
+              disabled={transition.isPending}
+              onClick={() => {
+                setPending(action.path);
+                transition.mutate(action.path);
+              }}
+            >
+              {action.label}
+            </Button>
+          ))}
+        </div>
       )}
     </li>
   );
@@ -141,6 +149,7 @@ function CompetitionAdmin({ competition }: { competition: CompetitionListItem })
 }
 
 function NewCompetitionForm({ onDone }: { onDone: () => void }) {
+  const toast = useToast();
   const [form, setForm] = useState({ name: '', slug: '', description: '', maxTeamSize: '' });
 
   const create = useMutation({
@@ -155,7 +164,10 @@ function NewCompetitionForm({ onDone }: { onDone: () => void }) {
           ...(form.maxTeamSize ? { maxTeamSize: Number(form.maxTeamSize) } : {}),
         },
       }),
-    onSuccess: onDone,
+    onSuccess: () => {
+      toast.success('Competition created', form.name);
+      onDone();
+    },
   });
 
   // Derive the slug from the name until the organizer edits it themselves; the
@@ -278,17 +290,18 @@ function AdminContent() {
         </section>
       )}
 
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      {/* Inventory totals only. Live rounds and queue health belong to the
+          console strip, which is on every staff page — repeating them here
+          would just be two places to read the same number. */}
+      <div className="mb-8 grid grid-cols-3 gap-3">
         {overview ? (
           <>
             <Stat label="Competitions" value={overview.competitions} />
             <Stat label="Participants" value={overview.participants} />
             <Stat label="Submissions" value={overview.submissions} />
-            <Stat label="In flight" value={overview.pendingSubmissions} tone="warn" />
-            <Stat label="Failed" value={overview.failedSubmissions} tone="danger" />
           </>
         ) : (
-          Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[76px] rounded-[14px]" />)
+          Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-[76px] rounded-[14px]" />)
         )}
       </div>
 
@@ -308,9 +321,9 @@ function AdminContent() {
 export default function AdminPage() {
   return (
     <AuthGate requireStaff>
-      <Shell>
+      <ConsoleShell>
         <AdminContent />
-      </Shell>
+      </ConsoleShell>
     </AuthGate>
   );
 }

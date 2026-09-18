@@ -56,6 +56,28 @@ export class ExecutionProcessor extends WorkerHost {
                 },
               },
             },
+            // A debugging challenge executes identically — same limits, same
+            // hidden tests, same partial credit. Only the authoring and the
+            // presentation differ, so the judge should not care which it is.
+            debuggingChallenge: {
+              select: {
+                cpuTimeLimit: true,
+                wallTimeLimit: true,
+                memoryLimitKb: true,
+                maxProcesses: true,
+                maxFileSizeKb: true,
+                testCases: {
+                  orderBy: { orderIndex: 'asc' },
+                  select: {
+                    id: true,
+                    stdin: true,
+                    expectedOutput: true,
+                    isHidden: true,
+                    weight: true,
+                  },
+                },
+              },
+            },
           },
         },
         round: {
@@ -70,12 +92,18 @@ export class ExecutionProcessor extends WorkerHost {
       },
     });
 
-    if (!submission?.challenge.codingChallenge) {
-      this.logger.error(`Submission ${submissionId} is missing its coding challenge`);
+    // One resolver, deliberately: if the processor started branching on challenge
+    // type in several places, that would be the signal these should have been a
+    // single model.
+    const executable =
+      submission?.challenge.codingChallenge ?? submission?.challenge.debuggingChallenge;
+
+    if (!submission || !executable) {
+      this.logger.error(`Submission ${submissionId} has no executable challenge`);
       return;
     }
 
-    const coding = submission.challenge.codingChallenge;
+    const coding = executable;
 
     await this.prisma.submission.update({
       where: { id: submissionId },

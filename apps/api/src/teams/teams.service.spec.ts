@@ -245,6 +245,35 @@ describe('TeamsService captaincy', () => {
   });
 });
 
+describe('TeamsService.disband', () => {
+  const team = { id: 'team-1', captainId: 'captain-1' };
+
+  it('lets the captain delete a team that still has members', async () => {
+    // The gap this closes: previously a captain had to remove every member one
+    // at a time before they were allowed to leave.
+    const { service, teamDelete, prisma } = build({ team });
+    (prisma.teamMember.count as jest.Mock).mockResolvedValue(3);
+
+    const result = await service.disband('team-1', 'captain-1');
+
+    expect(teamDelete).toHaveBeenCalledWith({ where: { id: 'team-1' } });
+    expect(result).toEqual({ disbanded: true, membersRemoved: 3 });
+  });
+
+  it('refuses a non-captain', async () => {
+    const { service, teamDelete } = build({ team });
+
+    await expect(service.disband('team-1', 'member-2')).rejects.toThrow(ForbiddenException);
+    expect(teamDelete).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown team', async () => {
+    const { service } = build({ team: null });
+
+    await expect(service.disband('missing', 'captain-1')).rejects.toThrow(NotFoundException);
+  });
+});
+
 describe('TeamsService.leave', () => {
   it('blocks a captain from abandoning a team that still has members', async () => {
     const { service } = build({

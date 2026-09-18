@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { ParticipationMode, Prisma, ScoreSource } from '@prisma/client';
+import { Injectable, Logger } from '@nestjs/common';
+import { ParticipationMode, Prisma, RoundState, ScoreSource } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
 import { weightedContribution } from './scoring';
@@ -22,6 +22,8 @@ export interface RecordScoreInput {
 
 @Injectable()
 export class ScoringService {
+  private readonly logger = new Logger(ScoringService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly leaderboard: LeaderboardService,
@@ -42,6 +44,24 @@ export class ScoringService {
   /// a challenge is the one that counts, so a later, better coding submission
   /// replaces an earlier one rather than stacking with it.
   async record(input: RecordScoreInput) {
+    // A finalized round's results have been published. Refusing here rather than
+    // in each caller means a late-arriving judge result cannot quietly rewrite a
+    // standing that people have already been told is final.
+    const round = await this.prisma.round.findUnique({
+      where: { id: input.roundId },
+      select: { state: true },
+    });
+
+    if (
+      round &&
+      (round.state === RoundState.FINALIZED || round.state === RoundState.ARCHIVED)
+    ) {
+      this.logger.warn(
+        `Refused a score write to ${round.state} round ${input.roundId} for user ${input.userId}`,
+      );
+      return null;
+    }
+
     const weightedScore = weightedContribution(
       input.rawScore,
       input.roundMaxPoints,

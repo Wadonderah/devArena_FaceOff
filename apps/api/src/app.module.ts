@@ -11,6 +11,7 @@ import { CompetitionsModule } from './competitions/competitions.module';
 import { TeamsModule } from './teams/teams.module';
 import { RoundsModule } from './rounds/rounds.module';
 import { ChallengesModule } from './challenges/challenges.module';
+import { ImportModule } from './challenges/import/import.module';
 import { ScoringModule } from './scoring/scoring.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { ExecutionModule } from './execution/execution.module';
@@ -46,6 +47,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     TeamsModule,
     RoundsModule,
     ChallengesModule,
+    ImportModule,
     LeaderboardModule,
     ScoringModule,
     ExecutionModule,
@@ -54,7 +56,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     HealthModule,
   ],
   providers: [
-    // Order matters: origin is checked first, then identity, then role, and the
+    // Origin is checked first, then identity, then role, and the
     // throttler last so it can key on the resolved user.
     { provide: APP_GUARD, useClass: OriginGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },

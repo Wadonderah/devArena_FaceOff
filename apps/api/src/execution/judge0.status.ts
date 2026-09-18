@@ -61,8 +61,26 @@ export function isPlatformFault(statusId: number): boolean {
 /// Judge0 CE language ids. Verify against `GET /languages` on the deployed
 /// instance — ids differ between Judge0 releases.
 export const LANGUAGE_IDS: Record<Language, number> = {
-  [Language.PYTHON]: 71,
-  [Language.JAVASCRIPT]: 63,
+  [Language.PYTHON]: 71, // Python (3.8.1)
+  [Language.JAVASCRIPT]: 63, // JavaScript (Node.js 12.14.0)
+  [Language.TYPESCRIPT]: 74, // TypeScript (3.7.4)
+  [Language.JAVA]: 62, // Java (OpenJDK 13.0.1)
+  [Language.CPP]: 54, // C++ (GCC 9.2.0)
+  [Language.C]: 50, // C (GCC 9.2.0)
+  [Language.GO]: 60, // Go (1.13.5)
+  [Language.CSHARP]: 51, // C# (Mono 6.6.0.161)
+};
+
+/// What a participant sees in the language picker.
+export const LANGUAGE_LABELS: Record<Language, string> = {
+  [Language.PYTHON]: 'Python 3',
+  [Language.JAVASCRIPT]: 'JavaScript',
+  [Language.TYPESCRIPT]: 'TypeScript',
+  [Language.JAVA]: 'Java',
+  [Language.CPP]: 'C++',
+  [Language.C]: 'C',
+  [Language.GO]: 'Go',
+  [Language.CSHARP]: 'C#',
 };
 
 export function humanMessage(outcome: ExecutionOutcome): string {

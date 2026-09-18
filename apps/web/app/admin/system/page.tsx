@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
-import { Shell } from '@/components/shell';
+import { ConsoleShell } from '@/components/console-shell';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Field } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
 import type { Role } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -100,6 +101,7 @@ function HealthPanel() {
 function PeoplePanel() {
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', search],
@@ -107,16 +109,37 @@ function PeoplePanel() {
       api<AdminUser[]>(`/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   });
 
+  // Granting a role and disabling an account are the two most consequential
+  // things anyone can do on this platform, and both used to happen in silence.
   const setRole = useMutation({
     mutationFn: ({ id, role }: { id: string; role: Role }) =>
       api(`/admin/users/${id}/role`, { method: 'PATCH', body: { role } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: (_data, { role }) => {
+      toast.success('Role updated', `Now ${ROLE_LABEL[role] ?? role}.`);
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (error) =>
+      toast.error(
+        'Could not change the role',
+        error instanceof ApiError ? error.displayMessage : undefined,
+      ),
   });
 
   const setActive = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
       api(`/admin/users/${id}/active`, { method: 'PATCH', body: { isActive } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    onSuccess: (_data, { isActive }) => {
+      toast.success(
+        isActive ? 'Account enabled' : 'Account disabled',
+        isActive ? undefined : 'Their sessions are revoked and they cannot sign in.',
+      );
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (error) =>
+      toast.error(
+        'Could not change the account',
+        error instanceof ApiError ? error.displayMessage : undefined,
+      ),
   });
 
   const error = setRole.error ?? setActive.error;
@@ -241,7 +264,7 @@ function AuditPanel() {
 export default function SystemPage() {
   return (
     <AuthGate requireSuperAdmin>
-      <Shell>
+      <ConsoleShell>
         <header className="mb-6">
           <h1 className="text-3xl">System</h1>
           <p className="mt-1.5 text-[15px] text-ink-dim">
@@ -254,7 +277,7 @@ export default function SystemPage() {
           <PeoplePanel />
           <AuditPanel />
         </div>
-      </Shell>
+      </ConsoleShell>
     </AuthGate>
   );
 }

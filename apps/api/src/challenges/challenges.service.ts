@@ -13,6 +13,7 @@ import {
 } from './challenge.selectors';
 import type {
   CreateCodingChallengeDto,
+  CreateDebuggingChallengeDto,
   CreateMCQChallengeDto,
   PublishChallengeDto,
 } from './dto/challenge.dto';
@@ -85,13 +86,56 @@ export class ChallengesService {
             constraints: dto.constraints,
             inputFormat: dto.inputFormat,
             outputFormat: dto.outputFormat,
-            starterCodePy: dto.starterCodePy,
-            starterCodeJs: dto.starterCodeJs,
+            starterCode: dto.starterCode ?? undefined,
             cpuTimeLimit: dto.cpuTimeLimit
               ? new Prisma.Decimal(dto.cpuTimeLimit)
               : undefined,
             memoryLimitKb: dto.memoryLimitKb,
             maxFileSizeKb: dto.maxFileSizeKb,
+            testCases: {
+              create: dto.testCases.map((tc, orderIndex) => ({
+                stdin: tc.stdin,
+                expectedOutput: tc.expectedOutput,
+                isHidden: tc.isHidden,
+                weight: tc.weight ?? 1,
+                orderIndex,
+              })),
+            },
+          },
+        },
+      },
+      select: ORGANIZER_CHALLENGE_SELECT,
+    });
+  }
+
+  async createDebugging(dto: CreateDebuggingChallengeDto) {
+    if (!dto.testCases.some((tc) => tc.isHidden)) {
+      throw new BadRequestException(
+        'A debugging challenge needs at least one hidden test case, or the fix can be hard-coded',
+      );
+    }
+
+    if (Object.keys(dto.brokenCode).length === 0) {
+      throw new BadRequestException('Provide the broken code in at least one language');
+    }
+
+    return this.prisma.challenge.create({
+      data: {
+        type: ChallengeType.DEBUGGING,
+        title: dto.title,
+        category: dto.category,
+        difficulty: dto.difficulty,
+        points: dto.points,
+        debuggingChallenge: {
+          create: {
+            bugReport: dto.bugReport,
+            failingTestOutput: dto.failingTestOutput,
+            brokenCode: dto.brokenCode,
+            contextFiles: dto.contextFiles ?? undefined,
+            cpuTimeLimit: dto.cpuTimeLimit
+              ? new Prisma.Decimal(dto.cpuTimeLimit)
+              : undefined,
+            memoryLimitKb: dto.memoryLimitKb,
             testCases: {
               create: dto.testCases.map((tc, orderIndex) => ({
                 stdin: tc.stdin,

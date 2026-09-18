@@ -99,6 +99,7 @@ export class AdminService {
         submissions: bigint;
         pending: bigint;
         failed: bigint;
+        live_rounds: bigint;
       }[]
     >`
       SELECT
@@ -108,7 +109,9 @@ export class AdminService {
         (SELECT count(*) FROM submissions
            WHERE status IN ('QUEUED', 'RUNNING'))       AS pending,
         (SELECT count(*) FROM submissions
-           WHERE status = 'SYSTEM_ERROR')               AS failed
+           WHERE status = 'SYSTEM_ERROR')               AS failed,
+        (SELECT count(*) FROM rounds
+           WHERE state = 'LIVE')                        AS live_rounds
     `;
 
     // Postgres count() returns bigint, which does not survive JSON serialisation.
@@ -118,6 +121,7 @@ export class AdminService {
       submissions: Number(row.submissions),
       pendingSubmissions: Number(row.pending),
       failedSubmissions: Number(row.failed),
+      liveRounds: Number(row.live_rounds),
     };
   }
 

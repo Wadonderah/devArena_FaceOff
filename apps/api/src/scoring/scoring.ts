@@ -8,8 +8,23 @@ export interface RoundContribution {
   weight: number;
 }
 
-export function gradeMcq(isCorrect: boolean, points: number): number {
-  return isCorrect ? points : 0;
+/// Grades one MCQ answer.
+///
+/// `negativeMarking` is the penalty for a wrong answer, and exists to discourage
+/// blind guessing on a four-option question where a guess is worth 25% for free.
+///
+/// The result is clamped at zero: a participant should never end a question
+/// worse off than not answering it, because that turns the round into a game of
+/// nerve rather than knowledge. Round-level totals are separately floored in
+/// normalizeRound().
+export function gradeMcq(isCorrect: boolean, points: number, negativeMarking = 0): number {
+  if (isCorrect) return points;
+
+  const penalty = Math.min(Math.abs(negativeMarking), points);
+
+  // Returned explicitly rather than as -penalty: negating zero yields -0, which
+  // survives into JSON and the database as "-0" and reads as a bug.
+  return penalty === 0 ? 0 : -penalty;
 }
 
 /// Coding challenges award partial credit by weighted test cases. A solution
@@ -42,7 +57,10 @@ export function weightedContribution(
 
 export function normalizeRound(rawScore: number, maxRawScore: number): number {
   if (maxRawScore <= 0) return 0;
-  return round6(Math.min(rawScore / maxRawScore, 1));
+  // Floored at zero as well as capped at one: with negative marking a round's
+  // raw total can go below zero, and a negative round score would subtract from
+  // a participant's other rounds.
+  return round6(Math.min(Math.max(rawScore / maxRawScore, 0), 1));
 }
 
 export function finalScore(contributions: RoundContribution[]): number {

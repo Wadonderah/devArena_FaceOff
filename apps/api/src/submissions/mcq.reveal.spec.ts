@@ -26,6 +26,8 @@ function buildService(revealMode: RevealMode, roundState: RoundState = RoundStat
     allowedLanguages: [],
     revealMode,
     participationMode: ParticipationMode.INDIVIDUAL,
+    negativeMarking: new Prisma.Decimal(0),
+    attemptLimit: null,
   };
 
   const prisma = {

@@ -43,18 +43,30 @@ export function Badge({
   );
 }
 
+// Exhaustive by type, so adding a state to RoundState fails the build here
+// rather than rendering an unstyled badge nobody notices.
 const ROUND_TONES: Record<RoundState, Tone> = {
   DRAFT: 'neutral',
   SCHEDULED: 'warn',
   LIVE: 'live',
+  PAUSED: 'warn',
   COMPLETED: 'success',
+  FINALIZED: 'brand',
   ARCHIVED: 'neutral',
+};
+
+// A paused round resumes and a finalized one is locked; both read as "over" if
+// left to the default lowercase enum name, which is the wrong idea in each case.
+const ROUND_LABELS: Partial<Record<RoundState, string>> = {
+  LIVE: 'Live now',
+  PAUSED: 'Paused',
+  FINALIZED: 'Scores final',
 };
 
 export function RoundStateBadge({ state }: { state: RoundState }) {
   return (
     <Badge tone={ROUND_TONES[state]} pulse={state === 'LIVE'}>
-      {state === 'LIVE' ? 'Live now' : state.toLowerCase()}
+      {ROUND_LABELS[state] ?? state.toLowerCase()}
     </Badge>
   );
 }

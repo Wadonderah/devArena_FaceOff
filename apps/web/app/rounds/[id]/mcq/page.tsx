@@ -12,6 +12,7 @@ import { Badge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
 import { useCountdown, useMcqProgress, useRound } from '@/lib/hooks';
+import { RoundRules } from '@/components/round-rules';
 import type { Challenge, McqSubmitResponse } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -268,6 +269,8 @@ function McqRound({ roundId }: { roundId: string }) {
           </div>
         )}
       </header>
+
+      <RoundRules round={round} />
 
       {progress && progress.totalQuestions > 0 &&
         progress.answeredCount >= progress.totalQuestions && (

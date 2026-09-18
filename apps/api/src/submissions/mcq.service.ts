@@ -90,7 +90,7 @@ export class McqService {
 
     const correctOption = question.options.find((o) => o.isCorrect)!;
     const isCorrect = selected.isCorrect;
-    const rawScore = gradeMcq(isCorrect, challenge.points);
+    const rawScore = gradeMcq(isCorrect, challenge.points, round.negativeMarking.toNumber());
 
     const answeredAt = new Date();
     const timeToSolveMs = round.startsAt

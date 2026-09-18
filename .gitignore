@@ -5,6 +5,7 @@ build/
 out/
 coverage/
 *.tsbuildinfo
+prisma/
 
 .env
 .env*.local
@@ -21,4 +22,8 @@ playwright-report/
 # internal docs
 software_engineering_faceoff_platform_build_document.md
 software_engineering_faceoff_mvp_build_document.md
+
+# manual tests
 phase-b-testing.md
+phase-c-testing.md
+question-import-format.md

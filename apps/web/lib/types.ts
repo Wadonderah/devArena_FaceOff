@@ -1,8 +1,29 @@
 export type Role = 'PARTICIPANT' | 'ORGANIZER' | 'SUPER_ADMIN';
-export type RoundState = 'DRAFT' | 'SCHEDULED' | 'LIVE' | 'COMPLETED' | 'ARCHIVED';
+export type RoundState =
+  | 'DRAFT'
+  | 'SCHEDULED'
+  | 'LIVE'
+  | 'PAUSED'
+  | 'COMPLETED'
+  | 'FINALIZED'
+  | 'ARCHIVED';
 export type CompetitionState = 'DRAFT' | 'REGISTRATION' | 'LIVE' | 'COMPLETED' | 'ARCHIVED';
-export type RoundType = 'MCQ' | 'CODING';
-export type Language = 'PYTHON' | 'JAVASCRIPT';
+export type RoundType = 'MCQ' | 'CODING' | 'DEBUGGING';
+
+/// Mirrors the ChallengeType enum. Deliberately a separate type from RoundType
+/// even though the members currently match: a round is a container with a
+/// lifecycle, a challenge is the thing inside it, and conflating them is what
+/// let a debugging round list coding problems.
+export type ChallengeType = 'MCQ' | 'CODING' | 'DEBUGGING';
+export type Language =
+  | 'PYTHON'
+  | 'JAVASCRIPT'
+  | 'TYPESCRIPT'
+  | 'JAVA'
+  | 'CPP'
+  | 'C'
+  | 'GO'
+  | 'CSHARP';
 export type SubmissionStatus =
   | 'QUEUED'
   | 'RUNNING'
@@ -45,6 +66,10 @@ export interface RoundSummary {
   revealMode?: RevealMode;
   participationMode?: ParticipationMode;
   weight?: string | number;
+  /// Null means unlimited. Graded submissions per challenge, not per round.
+  attemptLimit?: number | null;
+  /// Points deducted per wrong MCQ answer. Decimal, so it arrives as a string.
+  negativeMarking?: string | number | null;
   _count: { challenges: number };
 }
 
@@ -82,9 +107,18 @@ export interface TestCase {
   expectedOutput: string;
 }
 
+export interface DebuggingChallenge {
+  id: string;
+  bugReport: string;
+  failingTestOutput: string;
+  brokenCode: Partial<Record<Language, string>>;
+  contextFiles: Record<string, string> | null;
+  testCases: TestCase[];
+}
+
 export interface Challenge {
   id: string;
-  type: 'MCQ' | 'CODING';
+  type: 'MCQ' | 'CODING' | 'DEBUGGING';
   title: string;
   category: string;
   difficulty: string;
@@ -102,10 +136,11 @@ export interface Challenge {
     constraints: string | null;
     inputFormat: string | null;
     outputFormat: string | null;
-    starterCodePy: string | null;
-    starterCodeJs: string | null;
+    /// Keyed by Language, e.g. { PYTHON: "...", JAVA: "..." }.
+    starterCode: Partial<Record<Language, string>> | null;
     testCases: TestCase[];
   } | null;
+  debuggingChallenge: DebuggingChallenge | null;
 }
 
 export interface LeaderboardRow {
@@ -222,4 +257,18 @@ export interface TeamLeaderboard {
   competition: { id: string; name: string; state: CompetitionState };
   rows: TeamLeaderboardRow[];
   generatedAt: string;
+}
+
+/// Shape of GET /admin/overview.
+///
+/// Shared because both the console strip and the console landing page read it
+/// from one polled query — two local copies of this interface would drift the
+/// first time a counter is added.
+export interface Overview {
+  competitions: number;
+  participants: number;
+  submissions: number;
+  pendingSubmissions: number;
+  failedSubmissions: number;
+  liveRounds: number;
 }

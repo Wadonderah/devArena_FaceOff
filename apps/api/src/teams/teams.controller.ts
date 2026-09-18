@@ -55,6 +55,11 @@ export class TeamsController {
     return this.teams.leave(id, userId);
   }
 
+  @Delete('teams/:id')
+  disband(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('id') captainId: string) {
+    return this.teams.disband(id, captainId);
+  }
+
   @Delete('teams/:id/members/:userId')
   removeMember(
     @Param('id', ParseUUIDPipe) id: string,

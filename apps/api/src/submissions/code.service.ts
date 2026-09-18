@@ -25,7 +25,9 @@ export class CodeService {
   /// Graded submission. Everything cheap is validated before a job is queued, so
   /// an invalid request never reaches Judge0.
   async submit(userId: string, dto: SubmitCodeDto) {
-    const { coding, challenge } = await this.validate(userId, dto);
+    const { coding, challenge, round } = await this.validate(userId, dto);
+
+    await this.assertAttemptsRemain(userId, dto, round.attemptLimit);
 
     const submission = await this.prisma.submission.create({
       data: {
@@ -43,7 +45,9 @@ export class CodeService {
         challengeSnapshot: {
           title: challenge.title,
           points: challenge.points,
-          statement: coding.statement,
+          // A coding challenge has a statement; a debugging one has a bug report.
+          // Both are the "what was I asked to do" half of the snapshot.
+          statement: 'statement' in coding ? coding.statement : coding.bugReport,
           limits: {
             cpuTimeLimit: coding.cpuTimeLimit.toNumber(),
             wallTimeLimit: coding.wallTimeLimit.toNumber(),
@@ -184,10 +188,50 @@ export class CodeService {
     });
   }
 
+  /// Enforces `Round.attemptLimit`, counted per challenge rather than per round.
+  ///
+  /// Per round would make the cap depend on how many problems the organizer
+  /// happened to include; per challenge means "you get N tries at this one",
+  /// which is what an organizer setting the number is actually picturing.
+  ///
+  /// Only graded SUBMITs count. A trial Run is explicitly never scored, and a
+  /// SYSTEM_ERROR is the platform failing to grade — charging an attempt for
+  /// either would penalise a participant for something they did not do.
+  ///
+  /// The count and the insert are not atomic, so a participant firing two
+  /// submissions at once could get one extra attempt. That is a fairness guard,
+  /// not a security boundary, and the cost of being exactly right here
+  /// (serialising every submission) is far higher than the worst case.
+  private async assertAttemptsRemain(
+    userId: string,
+    dto: SubmitCodeDto,
+    attemptLimit: number | null,
+  ): Promise<void> {
+    if (attemptLimit === null) return;
+
+    const used = await this.prisma.submission.count({
+      where: {
+        userId,
+        roundId: dto.roundId,
+        challengeId: dto.challengeId,
+        kind: SubmissionKind.SUBMIT,
+        status: { not: SubmissionStatus.SYSTEM_ERROR },
+      },
+    });
+
+    if (used >= attemptLimit) {
+      throw new ForbiddenException(
+        `You have used all ${attemptLimit} attempts for this challenge`,
+      );
+    }
+  }
+
   private async validate(userId: string, dto: SubmitCodeDto) {
     const round = await this.rounds.requireLiveRound(dto.roundId);
 
-    if (round.type !== RoundType.CODING) {
+    // Debugging rounds submit through this same path: identical execution,
+    // identical scoring — the difference is what the participant was shown.
+    if (round.type !== RoundType.CODING && round.type !== RoundType.DEBUGGING) {
       throw new ForbiddenException('This round does not accept code submissions');
     }
 
@@ -226,6 +270,26 @@ export class CodeService {
             title: true,
             points: true,
             version: true,
+            debuggingChallenge: {
+              select: {
+                bugReport: true,
+                cpuTimeLimit: true,
+                wallTimeLimit: true,
+                memoryLimitKb: true,
+                maxProcesses: true,
+                maxFileSizeKb: true,
+                testCases: {
+                  orderBy: { orderIndex: 'asc' },
+                  select: {
+                    id: true,
+                    stdin: true,
+                    expectedOutput: true,
+                    isHidden: true,
+                    weight: true,
+                  },
+                },
+              },
+            },
             codingChallenge: {
               select: {
                 statement: true,
@@ -251,14 +315,19 @@ export class CodeService {
       },
     });
 
-    if (!link?.challenge.codingChallenge) {
+    const executable =
+      link?.challenge.codingChallenge ?? link?.challenge.debuggingChallenge;
+
+    if (!link || !executable) {
       throw new NotFoundException('Challenge not found in this round');
     }
 
     return {
       round,
       challenge: link.challenge,
-      coding: link.challenge.codingChallenge,
+      // Named `coding` throughout the rest of this service because from the
+      // judge's point of view that is exactly what it is.
+      coding: executable,
     };
   }
 }

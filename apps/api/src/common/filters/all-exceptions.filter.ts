@@ -132,6 +132,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
           code: 'NOT_FOUND',
           message: 'Record not found',
         };
+      case 'P1001':
+      case 'P1002':
+        // The database is unreachable, or a pooled connection died. In
+        // development this fires on every `nest --watch` restart: the old
+        // process exits without closing its pool and in-flight requests fail.
+        // It is an availability blip, not a fault in the request, and a full
+        // stack trace on every hot reload buries the errors that matter.
+        this.logger.warn(
+          `Database unreachable (${error.code}) — transient if the API just restarted`,
+        );
+        return {
+          status: HttpStatus.SERVICE_UNAVAILABLE,
+          code: 'DATABASE_UNAVAILABLE',
+          message: 'The service is reconnecting. Please try again in a moment.',
+        };
       case 'P2024':
         // Connection pool exhausted. The database is fine; this instance ran out
         // of connections, so it is a availability problem rather than a bug in

@@ -65,6 +65,22 @@ export class CreateRoundDto {
   @IsOptional()
   @IsEnum(ParticipationMode)
   participationMode?: ParticipationMode;
+
+  /// Null means unlimited, which is how every round behaved before this existed.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  attemptLimit?: number;
+
+  /// Points deducted per wrong MCQ answer. gradeMcq() clamps the deduction to the
+  /// question's own value, so this can never cost more than the question was worth.
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  negativeMarking?: number;
+
 }
 
 export class UpdateRoundDto {
@@ -108,6 +124,22 @@ export class UpdateRoundDto {
   @IsOptional()
   @IsEnum(ParticipationMode)
   participationMode?: ParticipationMode;
+
+  /// Null means unlimited, which is how every round behaved before this existed.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  attemptLimit?: number;
+
+  /// Points deducted per wrong MCQ answer. gradeMcq() clamps the deduction to the
+  /// question's own value, so this can never cost more than the question was worth.
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(100)
+  negativeMarking?: number;
+
 }
 
 export class SetRoundChallengesDto {

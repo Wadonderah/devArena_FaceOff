@@ -80,6 +80,26 @@ export class RoundsController {
     return this.rounds.transition(id, RoundState.COMPLETED);
   }
 
+  @Post('rounds/:id/pause')
+  @Roles(Role.ORGANIZER)
+  pause(@Param('id', ParseUUIDPipe) id: string) {
+    return this.rounds.transition(id, RoundState.PAUSED);
+  }
+
+  @Post('rounds/:id/resume')
+  @Roles(Role.ORGANIZER)
+  resume(@Param('id', ParseUUIDPipe) id: string) {
+    return this.rounds.transition(id, RoundState.LIVE);
+  }
+
+  /// Locks the round's scores. Separate from ending it, because an organizer
+  /// usually wants to review results before declaring them final.
+  @Post('rounds/:id/finalize')
+  @Roles(Role.ORGANIZER)
+  finalize(@Param('id', ParseUUIDPipe) id: string) {
+    return this.rounds.transition(id, RoundState.FINALIZED);
+  }
+
   @Post('rounds/:id/archive')
   @Roles(Role.ORGANIZER)
   archive(@Param('id', ParseUUIDPipe) id: string) {

@@ -48,8 +48,7 @@ export class TeamsService {
                     code,
                     avatarUrl: dto.avatarUrl,
                     captainId: userId,
-                    // The creator is the first member. Done in one transaction so a team can
-                    // never exist with no members and no captain in it.
+
                     members: { create: { userId, competitionId } },
                 },
                 select: TEAM_SELECT,
@@ -96,8 +95,7 @@ export class TeamsService {
 
         if (!team) throw new NotFoundException('Team not found')
 
-        // A captain leaving would orphan the team, so captaincy must move first. The
-        // exception is the last member, where leaving disbands the team outright.
+
         if (team.captainId === userId && team._count.members > 1) {
             throw new ForbiddenException(
                 'Transfer captaincy to another member before leaving the team'
@@ -118,6 +116,18 @@ export class TeamsService {
 
         await this.prisma.teamMember.delete({ where: { id: membership.id } })
         return { left: true, disbanded: false }
+    }
+
+
+    async disband(teamId: string, captainId: string) {
+        const team = await this.requireCaptain(teamId, captainId)
+
+        const memberCount = await this.prisma.teamMember.count({ where: { teamId } })
+
+
+        await this.prisma.team.delete({ where: { id: team.id } })
+
+        return { disbanded: true, membersRemoved: memberCount }
     }
 
     async removeMember(teamId: string, captainId: string, targetUserId: string) {
@@ -201,7 +211,7 @@ export class TeamsService {
 
         if (!team) throw new NotFoundException('Team not found')
 
-        // Captaincy is checked against the team row, never against a platform role.
+
         if (team.captainId !== userId) {
             throw new ForbiddenException('Only the team captain can do that')
         }

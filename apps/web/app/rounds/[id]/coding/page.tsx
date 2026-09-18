@@ -10,14 +10,19 @@ import { Button } from '@/components/ui/button';
 import { Badge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
 import { useCountdown, useRound, useSubmission } from '@/lib/hooks';
+import { RoundRules } from '@/components/round-rules';
 import type { Challenge, Language, RunResult } from '@/lib/types';
 import { cn } from '@/lib/cn';
+import { LANGUAGE_LABELS } from '@/lib/taxonomy';
 
 function starterFor(challenge: Challenge, language: Language): string {
   const coding = challenge.codingChallenge;
   if (!coding) return '';
-  return (language === 'PYTHON' ? coding.starterCodePy : coding.starterCodeJs) ?? '';
+  // Keyed lookup rather than a ternary per language — the old two-branch version
+  // silently handed Java authors the JavaScript starter.
+  return coding.starterCode?.[language] ?? '';
 }
 
 function OutcomePill({ passed, label }: { passed: boolean; label: string }) {
@@ -172,6 +177,7 @@ function Problem({
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [runResults, setRunResults] = useState<RunResult[] | null>(null);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const { data: challenge, isLoading } = useQuery({
     queryKey: ['challenge', challengeId, roundId],
@@ -204,10 +210,18 @@ function Problem({
         body: { roundId, challengeId, language, sourceCode: code },
       }),
     onSuccess: (data) => {
+      // Grading is asynchronous, so without this the button just stops spinning
+      // and nothing visibly happens until the poll returns a verdict.
+      toast.success('Submitted for grading', 'Your result appears below when the judge finishes.');
       setSubmissionId(data.id);
       setRunResults(null);
       queryClient.invalidateQueries({ queryKey: ['my-submissions', roundId] });
     },
+    onError: (error) =>
+      toast.error(
+        'Submission refused',
+        error instanceof ApiError ? error.displayMessage : undefined,
+      ),
   });
 
   if (isLoading) return <Skeleton className="h-96 w-full rounded-[14px]" />;
@@ -282,7 +296,7 @@ function Problem({
                     : 'text-ink-dim hover:text-ink',
                 )}
               >
-                {lang === 'PYTHON' ? 'Python' : 'JavaScript'}
+                {LANGUAGE_LABELS[lang] ?? lang}
               </button>
             ))}
           </div>
@@ -361,6 +375,8 @@ function CodingRound({ roundId }: { roundId: string }) {
           </div>
         )}
       </header>
+
+      <RoundRules round={round} />
 
       {ids && ids.challengeIds.length > 1 && (
         <nav aria-label="Problems" className="mb-5 flex flex-wrap gap-2">

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { TeamCard } from '@/components/team-card';
 import { useCompetitions, useCurrentUser, useProfile } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
+import { ROUND_PATH } from '@/lib/taxonomy';
 
 function VerifyBanner() {
   const { data: user } = useCurrentUser();
@@ -76,7 +77,7 @@ function CurrentCompetition({ id }: { id: string }) {
             </div>
 
             {focus.state === 'LIVE' && data.joined && (
-              <Link href={`/rounds/${focus.id}/${focus.type === 'MCQ' ? 'mcq' : 'coding'}`}>
+              <Link href={`/rounds/${focus.id}/${ROUND_PATH[focus.type]}`}>
                 <Button>Enter round</Button>
               </Link>
             )}

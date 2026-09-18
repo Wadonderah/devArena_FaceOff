@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Field } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
 import { useCompetition, useCountdown } from '@/lib/hooks';
+import { ROUND_PATH } from '@/lib/taxonomy';
 import type { RoundSummary, Team } from '@/lib/types';
 
 function RoundCard({
@@ -27,7 +28,7 @@ function RoundCard({
     round.state === 'LIVE' ? round.endsAt : null,
   );
 
-  const href = `/rounds/${round.id}/${round.type === 'MCQ' ? 'mcq' : 'coding'}`;
+  const href = `/rounds/${round.id}/${ROUND_PATH[round.type]}`;
   const open = round.state === 'LIVE' && competitionJoined;
 
   return (
@@ -281,10 +282,20 @@ function TeamPanel({
 function CompetitionContent({ id }: { id: string }) {
   const { data, isLoading, error } = useCompetition(id);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const join = useMutation({
     mutationFn: () => api(`/competitions/${id}/join`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['competition', id] }),
+    onSuccess: () => {
+      toast.success('You have joined', 'You can now take part in this competition\u2019s rounds.');
+      queryClient.invalidateQueries({ queryKey: ['competition', id] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    },
+    onError: (error) =>
+      toast.error(
+        'Could not join',
+        error instanceof ApiError ? error.displayMessage : undefined,
+      ),
   });
 
   if (isLoading) return <SkeletonRows rows={4} />;

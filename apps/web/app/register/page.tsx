@@ -60,7 +60,14 @@ export default function RegisterPage() {
         Verify your email, join the competition, and you&apos;re in.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
+            {/*
+        method="post" matters even though onSubmit handles the request. A form
+        with no method defaults to GET, so if hydration ever fails this form
+        becomes inert HTML and the browser submits the password in the query
+        string — into history, access logs and Referer headers. With POST the
+        worst case puts it in a request body instead.
+      */}
+      <form method="post" onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
         <Field
           label="Display name"
           name="displayName"

@@ -7,12 +7,14 @@ import {
 } from '@nestjs/common'
 import { ChallengeType, Prisma, RoundState, RoundType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { seededShuffle } from '../common/shuffle'
 import { canTransition } from './round-state'
 import type { CreateRoundDto, SetRoundChallengesDto, UpdateRoundDto } from './dto/round.dto'
 
 const CHALLENGE_TYPE_FOR: Record<RoundType, ChallengeType> = {
     [RoundType.MCQ]: ChallengeType.MCQ,
     [RoundType.CODING]: ChallengeType.CODING,
+    [RoundType.DEBUGGING]: ChallengeType.DEBUGGING,
 }
 
 @Injectable()
@@ -39,19 +41,17 @@ export class RoundsService {
                 weight: new Prisma.Decimal(dto.weight),
                 startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
                 endsAt: dto.endsAt ? new Date(dto.endsAt) : null,
-                allowedLanguages: dto.type === RoundType.CODING ? (dto.allowedLanguages ?? []) : [],
+                allowedLanguages: dto.type === RoundType.MCQ ? [] : (dto.allowedLanguages ?? []),
                 revealMode: dto.revealMode,
                 participationMode: dto.participationMode,
+                attemptLimit: dto.attemptLimit,
+                negativeMarking: dto.negativeMarking,
             },
         })
     }
 
     async update(roundId: string, dto: UpdateRoundDto) {
         const round = await this.requireRound(roundId)
-
-        // Once a round is live or finished its terms are fixed. Changing weight or
-        // timing mid-round would silently rescore work already submitted under the
-        // old rules.
         if (round.state !== RoundState.DRAFT && round.state !== RoundState.SCHEDULED) {
             throw new ForbiddenException('A round can only be edited before it goes live')
         }
@@ -74,14 +74,13 @@ export class RoundsService {
                 startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
                 endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
                 allowedLanguages:
-                    dto.allowedLanguages !== undefined && round.type === RoundType.CODING
+                    dto.allowedLanguages !== undefined && round.type !== RoundType.MCQ
                         ? dto.allowedLanguages
                         : undefined,
-                // Falls under the same pre-LIVE freeze as weight and timing above:
-                // changing the reveal policy mid-round would treat participants who
-                // already answered differently from those who have not.
                 revealMode: dto.revealMode,
                 participationMode: dto.participationMode,
+                attemptLimit: dto.attemptLimit,
+                negativeMarking: dto.negativeMarking,
             },
         })
     }
@@ -103,9 +102,8 @@ export class RoundsService {
                 )
             }
 
-            // Neon suspends idle compute. Warming it here means the first participant
-            // to load the round does not absorb the cold-start latency.
-            await this.prisma.warm()
+
+            // await this.prisma.warm()
         }
 
         const now = new Date()
@@ -193,8 +191,7 @@ export class RoundsService {
         return round
     }
 
-    /// Participants can read a round's shape at any published state, but its
-    /// challenges are withheld until the round is actually live.
+
     async findOneForParticipant(roundId: string, userId: string) {
         const round = await this.prisma.round.findFirst({
             where: { id: roundId, state: { not: RoundState.DRAFT } },
@@ -208,6 +205,8 @@ export class RoundsService {
                 startsAt: true,
                 endsAt: true,
                 allowedLanguages: true,
+                attemptLimit: true,
+                negativeMarking: true,
                 _count: { select: { challenges: true } },
             },
         })
@@ -247,7 +246,16 @@ export class RoundsService {
             select: { challengeId: true },
         })
 
-        return { challengeIds: links.map((l) => l.challengeId) }
+        // Per-participant question order, seeded so a refresh does not reshuffle
+        // mid-round. Combined with the per-participant option order already in
+        // ChallengesService, two people sitting together share neither a question
+        // number nor an option letter — so "number 4 is B" carries no information.
+        const ordered = seededShuffle(
+            links.map((l) => l.challengeId),
+            `${userId}:${roundId}`
+        )
+
+        return { challengeIds: ordered }
     }
 
     async requireLiveRound(roundId: string) {
@@ -264,10 +272,18 @@ export class RoundsService {
                 allowedLanguages: true,
                 revealMode: true,
                 participationMode: true,
+                negativeMarking: true,
+                attemptLimit: true,
             },
         })
 
         if (!round) throw new NotFoundException('Round not found')
+
+        if (round.state === RoundState.PAUSED) {
+            throw new ForbiddenException(
+                'This round is paused. Hold on — the organizer will resume it shortly.'
+            )
+        }
 
         if (round.state !== RoundState.LIVE) {
             throw new ForbiddenException('This round is not currently accepting entries')

@@ -41,8 +41,7 @@ describe('PARTICIPANT_CHALLENGE_SELECT', () => {
     expect(mcqOptions.select).toMatchObject({ id: true, label: true, text: true });
     expect(PARTICIPANT_CHALLENGE_SELECT.codingChallenge.select).toMatchObject({
       statement: true,
-      starterCodePy: true,
-      starterCodeJs: true,
+      starterCode: true,
     });
   });
 });
