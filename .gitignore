@@ -5,7 +5,7 @@ build/
 out/
 coverage/
 *.tsbuildinfo
-prisma/
+
 
 .env
 .env*.local
