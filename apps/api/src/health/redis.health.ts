@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { Redis } from 'ioredis';
 import { AppConfigService } from '../config/config.service';
 
 @Injectable()
 export class RedisHealthIndicator {
+  private readonly logger = new Logger(RedisHealthIndicator.name);
+
   constructor(
     private readonly config: AppConfigService,
     private readonly indicator: HealthIndicatorService,
@@ -23,7 +25,11 @@ export class RedisHealthIndicator {
       await client.ping();
       return check.up();
     } catch (error) {
-      return check.down({ message: (error as Error).message });
+      // The real message names hosts and ports ("connect ECONNREFUSED
+      // 10.0.1.5:5432"). /health is public and unauthenticated, so it says
+      // only that the dependency is down; the detail goes to the log.
+      this.logger.warn(`Health check failed: ${(error as Error).message}`);
+      return check.down({ message: 'unreachable' });
     } finally {
       client.disconnect();
     }

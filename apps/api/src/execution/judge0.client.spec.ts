@@ -1,5 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
-import { Judge0Client, type Judge0SubmissionSpec } from './judge0.client';
+import { Judge0Client, MAX_OUTPUT_BYTES, type Judge0SubmissionSpec } from './judge0.client';
 import { JUDGE0_STATUS } from './judge0.status';
 import type { AppConfigService } from '../config/config.service';
 
@@ -117,6 +117,44 @@ describe('Judge0Client', () => {
       const [result] = await new Judge0Client(config).awaitBatch(['t1']);
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(result.statusId).toBe(JUDGE0_STATUS.ACCEPTED);
+    });
+
+    it('truncates oversized output at the decode boundary', async () => {
+      // A participant can print a megabyte per visible test per attempt. That
+      // must not reach Postgres or the browser in full.
+      const huge = 'x'.repeat(MAX_OUTPUT_BYTES * 4);
+      mockFetch({
+        submissions: [
+          {
+            token: 't1',
+            status: { id: JUDGE0_STATUS.ACCEPTED },
+            stdout: b64(huge),
+            stderr: b64(huge),
+            compile_output: b64('fine'),
+          },
+        ],
+      });
+
+      const [result] = await new Judge0Client(config).awaitBatch(['t1']);
+
+      expect(result.stdout!.length).toBeLessThan(MAX_OUTPUT_BYTES + 64);
+      expect(result.stdout).toMatch(/truncated at 16 KB\]$/);
+      expect(result.stderr).toMatch(/truncated/);
+      // Small fields pass through untouched.
+      expect(result.compileOutput).toBe('fine');
+    });
+
+    it('does not split a multi-byte character when truncating', async () => {
+      // '€' is three bytes and 16384 % 3 === 1, so a naive byte cut lands one
+      // byte into a character. (A two-byte character would pass by luck.)
+      const text = '€'.repeat(MAX_OUTPUT_BYTES);
+      mockFetch({
+        submissions: [{ token: 't1', status: { id: JUDGE0_STATUS.ACCEPTED }, stdout: b64(text) }],
+      });
+
+      const [result] = await new Judge0Client(config).awaitBatch(['t1']);
+
+      expect(result.stdout).not.toContain('\uFFFD');
     });
 
     it('treats a missing status as an internal error rather than a pass', async () => {

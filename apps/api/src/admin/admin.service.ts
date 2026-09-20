@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { RequestContext } from '../common/request-context';
 import { LeaderboardService } from '../leaderboard/leaderboard.service';
 import { AuditService } from '../audit/audit.service';
 import { toCsv } from './csv';
@@ -271,7 +272,4 @@ export class AdminService {
   }
 }
 
-export interface RequestContext {
-  ip: string | null;
-  userAgent: string | null;
-}
+

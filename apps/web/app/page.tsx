@@ -1,21 +1,30 @@
 import Link from 'next/link';
-import { LivePreview } from '@/components/live-preview';
+import { Arena } from '@/components/arena';
+import { Sky } from '@/components/sky';
 import { ThemeToggle } from '@/components/theme-toggle';
 
+// Illustrative weights — organizers set their own per competition.
 const ROUNDS = [
   {
     tag: 'Round 1',
     name: 'Knowledge Arena',
-    copy: 'Multiple-choice questions across algorithms, data structures, databases and Git. Graded on the server the moment you answer.',
+    copy: 'Multiple-choice across algorithms, data structures, databases, security and Git. Graded on the server the moment you answer, in an order nobody else sees.',
     meta: '20 questions · 10 minutes',
-    weight: '40%',
+    weight: '30%',
   },
   {
     tag: 'Round 2',
     name: 'Code Sprint',
-    copy: 'Timed programming problems executed in a sandboxed judge against test cases you never see. Partial credit for partial progress.',
+    copy: 'Timed problems in any of eight languages, executed in a sandboxed judge against test cases you never see. Partial credit for partial progress.',
     meta: '3 problems · 45 minutes',
-    weight: '60%',
+    weight: '40%',
+  },
+  {
+    tag: 'Round 3',
+    name: 'Bug Hunt',
+    copy: 'A bug report, the failing output, and broken code that compiles. Find the fault and fix it — hidden tests decide whether you actually did.',
+    meta: '2 bugs · 30 minutes',
+    weight: '30%',
   },
 ];
 
@@ -24,7 +33,8 @@ const TIMELINE = [
   { step: '02', title: 'Form a team', copy: 'Start a team, or join one with a six-character code.' },
   { step: '03', title: 'Knowledge Arena', copy: 'Answer under the clock. Scored the instant you submit.' },
   { step: '04', title: 'Code Sprint', copy: 'Write real code. Run it. Submit it. Watch it judged.' },
-  { step: '05', title: 'Final standings', copy: 'Weighted across rounds, tie-breaks applied.' },
+  { step: '05', title: 'Bug Hunt', copy: 'Read the report, find the fault, make the tests pass.' },
+  { step: '06', title: 'Final standings', copy: 'Weighted across rounds, tie-breaks applied.' },
 ];
 
 const INTEGRITY = [
@@ -47,35 +57,17 @@ const INTEGRITY = [
 
 export default function LandingPage() {
   return (
-    <main id="main">
+    <main id="main" className="relative isolate">
+      <Sky />
+
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
-        <div className="grid-field pointer-events-none absolute inset-0" aria-hidden />
-
-        {/* A plotted curve across the graph field — the shape a score takes over
-            a round. Decorative, so it is hidden from assistive tech. */}
-        <svg
-          aria-hidden
-          viewBox="0 0 1200 320"
-          preserveAspectRatio="none"
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-56 w-full"
-        >
-          <path
-            className="plot-area"
-            d="M0,300 L0,250 C120,240 180,200 300,190 C420,180 470,215 600,170 C720,130 780,95 900,80 C1020,66 1100,52 1200,30 L1200,300 Z"
-          />
-          <path
-            className="plot-line"
-            d="M0,250 C120,240 180,200 300,190 C420,180 470,215 600,170 C720,130 780,95 900,80 C1020,66 1100,52 1200,30"
-          />
-        </svg>
-
         <div className="relative mx-auto flex max-w-6xl justify-end px-5 pt-5">
           <ThemeToggle />
         </div>
 
-        <div className="relative mx-auto max-w-6xl px-5 pt-10 pb-20 sm:pt-14">
-          <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)]">
+        <div className="relative mx-auto max-w-6xl px-5 pt-8 pb-16 sm:pt-12 lg:pb-24">
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:gap-14">
             <div>
               <span className="inline-flex items-center gap-2 border-l-2 border-live pl-3 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-dim">
                 Season 1 · Akwannya Hub
@@ -106,7 +98,7 @@ export default function LandingPage() {
                   href="/register"
                   className="glow-brand inline-flex h-12 items-center rounded-xl bg-brand px-6 text-[15px] font-medium text-white transition-colors hover:bg-brand-bright"
                 >
-                  Enter the competition
+                  Enter the arena
                 </Link>
                 <Link
                   href="/login"
@@ -120,7 +112,7 @@ export default function LandingPage() {
                 {[
                   ['Entry', 'Free'],
                   ['Formats', 'Solo & team'],
-                  ['Languages', 'Python · JS'],
+                  ['Languages', 'Eight, your pick'],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <dt className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-faint">
@@ -132,7 +124,14 @@ export default function LandingPage() {
               </dl>
             </div>
 
-            <LivePreview />
+            {/* The stage. Framed like a window onto the event, and allowed to
+                run past the column on wide screens so it reads as a place
+                rather than a card. First on small screens: it is the hook. */}
+            <div className="order-first lg:order-none lg:-mr-10 xl:-mr-20">
+              <div className="overflow-hidden rounded-[22px] border border-line/70 shadow-[0_40px_90px_-40px_rgba(0,0,0,0.75)]">
+                <Arena />
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -145,7 +144,7 @@ export default function LandingPage() {
           How a Face-Off runs
         </h2>
 
-        <ol className="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
+        <ol className="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-6">
           {TIMELINE.map((item, i) => (
             <li key={item.step} className="group relative">
               {/* Connector, drawn only between items on a single row. */}
@@ -176,11 +175,11 @@ export default function LandingPage() {
             The rounds
           </h2>
 
-          <div className="relative mt-8 grid items-stretch gap-4 sm:grid-cols-2">
+          <div className="relative mt-8 grid items-stretch gap-4 sm:grid-cols-3">
             {ROUNDS.map((round) => (
               <article
                 key={round.tag}
-                className="bracketed relative rounded-[14px] border border-line bg-surface-1 p-7 transition-colors hover:border-brand/40"
+                className="bracketed relative rounded-[14px] border border-line/60 bg-surface-1/60 p-7 backdrop-blur-sm transition-colors hover:border-brand/40"
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-brand-bright">
@@ -199,15 +198,6 @@ export default function LandingPage() {
               </article>
             ))}
 
-            {/* The versus mark that turns two cards into a matchup. */}
-            <span
-              aria-hidden
-              className="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 sm:block"
-            >
-              <span className="grid size-11 place-items-center rounded-full border border-line bg-surface-0 font-display text-[13px] font-bold tracking-wider text-ink-faint">
-                VS
-              </span>
-            </span>
           </div>
 
           <p className="mt-6 text-[14px] text-ink-faint">
@@ -244,7 +234,6 @@ export default function LandingPage() {
 
       {/* ── Close ────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden border-t border-line">
-        <div className="grid-field pointer-events-none absolute inset-0 rotate-180" aria-hidden />
 
         <div className="relative mx-auto max-w-6xl px-5 py-24 text-center">
           <h2 className="font-display text-[clamp(2rem,5vw,3rem)] font-bold tracking-[-0.03em]">

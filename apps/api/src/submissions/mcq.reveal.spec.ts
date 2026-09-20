@@ -125,6 +125,25 @@ describe('MCQ answer reveal', () => {
     });
   });
 
+  describe('ON_ROUND_END after the round closes', () => {
+    // FINALIZED was missing from the hand-written state list, so finalizing a
+    // round — the normal last step — made its results vanish for everyone.
+    it.each([RoundState.COMPLETED, RoundState.FINALIZED, RoundState.ARCHIVED])(
+      'publishes results in state %s',
+      async (state) => {
+        const service = buildService(RevealMode.ON_ROUND_END, state);
+        await expect(service.results('user-1', 'round-1')).resolves.toBeDefined();
+      },
+    );
+
+    it('withholds results while still live or paused', async () => {
+      for (const state of [RoundState.LIVE, RoundState.PAUSED]) {
+        const service = buildService(RevealMode.ON_ROUND_END, state);
+        await expect(service.results('user-1', 'round-1')).rejects.toThrow(/once the round closes/);
+      }
+    });
+  });
+
   describe('grading is independent of reveal mode', () => {
     it('scores the same regardless of what the participant is told', async () => {
       for (const mode of Object.values(RevealMode)) {

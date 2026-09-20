@@ -20,7 +20,7 @@ function baseOptions(config: AppConfigService): CookieOptions {
 export function setAuthCookies(
   res: Response,
   config: AppConfigService,
-  tokens: { accessToken: string; refreshToken: string },
+  tokens: { accessToken: string; refreshToken: string | null },
 ): void {
   const base = baseOptions(config);
 
@@ -29,6 +29,10 @@ export function setAuthCookies(
     path: '/',
     maxAge: 15 * 60 * 1000,
   });
+
+  // A null refresh token means "leave the one the browser has" — it is newer
+  // than anything this response could set.
+  if (tokens.refreshToken === null) return;
 
   res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
     ...base,

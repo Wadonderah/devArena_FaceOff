@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import './globals.css';
@@ -38,7 +39,11 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Set per request by middleware.ts. Reading headers here makes every page
+  // dynamic, which costs nothing: each one is an auth-gated client shell.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html
       lang="en"
@@ -58,6 +63,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           components/theme-toggle.tsx — if one changes, so must the other.
         */}
         <script
+          nonce={nonce}
+          // Browsers blank the nonce attribute after parsing so page scripts
+          // cannot read it (only the IDL property keeps it). React then sees
+          // nonce="" on the client against the server's value and reports a
+          // mismatch. The script has already run by that point; the difference
+          // is expected and carries no consequence.
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('faceoff-theme')||'system';var d=t==='system'?(window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;document.documentElement.dataset.theme=d}catch(e){}})()`,
           }}

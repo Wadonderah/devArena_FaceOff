@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayUnique,
   IsArray,
   IsDateString,
@@ -8,6 +9,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -145,7 +147,8 @@ export class UpdateRoundDto {
 export class SetRoundChallengesDto {
   @IsArray()
   @ArrayUnique()
-  @IsString({ each: true })
+  @ArrayMaxSize(100)
+  @IsUUID(undefined, { each: true })
   @Type(() => String)
   challengeIds!: string[];
 }

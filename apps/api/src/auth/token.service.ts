@@ -18,6 +18,15 @@ export interface IssuedTokens {
   refreshToken: string;
 }
 
+/// What a rotation hands back. The refresh token is null when only the access
+/// token was renewed — a grace-window replay. The browser already holds the
+/// replacement refresh cookie from the rotation that won the race, so nothing
+/// must be written over it.
+export interface RotatedTokens {
+  accessToken: string;
+  refreshToken: string | null;
+}
+
 /// How long a just-rotated refresh token keeps working. Long enough to cover
 /// several tabs refreshing at once and a slow round trip; short enough that a
 /// stolen token replayed later is still caught.
@@ -42,17 +51,7 @@ export class TokenService {
     user: { id: string; email: string; role: Role; emailVerified: boolean },
     familyId: string = randomUUID(),
   ): Promise<IssuedTokens> {
-    const payload: AccessTokenPayload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      emailVerified: user.emailVerified,
-    };
-
-    const accessToken = await this.jwt.signAsync(payload, {
-      secret: this.config.get('JWT_ACCESS_SECRET'),
-      expiresIn: this.config.get('ACCESS_TOKEN_TTL') as JwtSignOptions['expiresIn'],
-    });
+    const accessToken = await this.signAccess(user);
 
     const refreshToken = randomBytes(48).toString('base64url');
     const expiresAt = new Date(
@@ -71,10 +70,29 @@ export class TokenService {
     return { accessToken, refreshToken };
   }
 
+  private signAccess(user: {
+    id: string;
+    email: string;
+    role: Role;
+    emailVerified: boolean;
+  }): Promise<string> {
+    const payload: AccessTokenPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      emailVerified: user.emailVerified,
+    };
+
+    return this.jwt.signAsync(payload, {
+      secret: this.config.get('JWT_ACCESS_SECRET'),
+      expiresIn: this.config.get('ACCESS_TOKEN_TTL') as JwtSignOptions['expiresIn'],
+    });
+  }
+
   /// Rotates a refresh token. A token that exists but has already been rotated is
   /// evidence the credential leaked — the whole family is revoked rather than the
   /// single token, forcing the real user and the attacker both to re-authenticate.
-  async rotate(presentedToken: string): Promise<IssuedTokens> {
+  async rotate(presentedToken: string): Promise<RotatedTokens> {
     const tokenHash = TokenService.hash(presentedToken);
 
     const stored = await this.prisma.refreshToken.findUnique({
@@ -107,7 +125,13 @@ export class TokenService {
         this.logger.debug(
           `Refresh replay inside the rotation grace window for user ${stored.userId}`,
         );
-        return this.issue(stored.user, stored.familyId);
+
+        // Access token only. The tab that lost the race just needs to finish its
+        // request; the browser's cookie jar already holds the refresh token the
+        // winning tab was given. Minting another one here meant every replay in
+        // the window added a live token to the family — so a stolen token
+        // replayed within 30 s yielded a persistent session of its own.
+        return { accessToken: await this.signAccess(stored.user), refreshToken: null };
       }
 
       await this.revokeFamily(stored.familyId);

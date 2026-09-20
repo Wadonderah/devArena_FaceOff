@@ -31,6 +31,19 @@ export function scoresAreLocked(state: RoundState): boolean {
   return state === RoundState.FINALIZED || state === RoundState.ARCHIVED;
 }
 
+/// A round whose answers may be shown: it has ended and will not reopen.
+///
+/// Named here so the three "is it over yet" states stay in one place. The MCQ
+/// results gate listed COMPLETED and ARCHIVED by hand and missed FINALIZED
+/// when it was added — so finalizing a round hid its results from everyone.
+export function hasClosed(state: RoundState): boolean {
+  return (
+    state === RoundState.COMPLETED ||
+    state === RoundState.FINALIZED ||
+    state === RoundState.ARCHIVED
+  );
+}
+
 export function canTransition(from: RoundState, to: RoundState): boolean {
   return ALLOWED[from].includes(to);
 }

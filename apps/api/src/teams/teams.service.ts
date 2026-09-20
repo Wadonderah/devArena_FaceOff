@@ -84,7 +84,7 @@ export class TeamsService {
             throw error
         }
 
-        return this.findOne(team.id)
+        return this.findOne(team.id, userId)
     }
 
     async leave(teamId: string, userId: string) {
@@ -94,6 +94,8 @@ export class TeamsService {
         })
 
         if (!team) throw new NotFoundException('Team not found')
+
+        await this.assertMembershipMutable(teamId)
 
 
         if (team.captainId === userId && team._count.members > 1) {
@@ -121,6 +123,7 @@ export class TeamsService {
 
     async disband(teamId: string, captainId: string) {
         const team = await this.requireCaptain(teamId, captainId)
+        await this.assertMembershipMutable(teamId)
 
         const memberCount = await this.prisma.teamMember.count({ where: { teamId } })
 
@@ -132,6 +135,7 @@ export class TeamsService {
 
     async removeMember(teamId: string, captainId: string, targetUserId: string) {
         const team = await this.requireCaptain(teamId, captainId)
+        await this.assertMembershipMutable(teamId)
 
         if (targetUserId === team.captainId) {
             throw new ForbiddenException('Transfer captaincy before removing yourself')
@@ -145,7 +149,7 @@ export class TeamsService {
         if (!membership) throw new NotFoundException('That participant is not in this team')
 
         await this.prisma.teamMember.delete({ where: { id: membership.id } })
-        return this.findOne(teamId)
+        return this.findOne(teamId, captainId)
     }
 
     async transferCaptaincy(teamId: string, captainId: string, targetUserId: string) {
@@ -165,17 +169,32 @@ export class TeamsService {
             data: { captainId: targetUserId },
         })
 
-        return this.findOne(teamId)
+        return this.findOne(teamId, captainId)
     }
 
-    async findOne(teamId: string) {
+    /// A team as seen by `viewerId`.
+    ///
+    /// The join code is a bearer credential: anyone holding it can join. It used
+    /// to be returned to every authenticated caller, and team ids are listable,
+    /// so a rival could read any team's code and fill a capped team with their
+    /// own people. Members (and staff, who reach this through other paths) still
+    /// see it; everyone else gets the team without it.
+    async findOne(teamId: string, viewerId: string) {
         const team = await this.prisma.team.findUnique({
             where: { id: teamId },
             select: TEAM_SELECT,
         })
 
         if (!team) throw new NotFoundException('Team not found')
-        return team
+
+        const isMember = team.members.some((m) => m.userId === viewerId)
+        if (isMember) return team
+
+        // Omit the key rather than null it, so a client cannot tell "no code"
+        // from "code withheld" — and cannot accidentally render an empty badge.
+        const { code: _withheld, ...withoutCode } = team
+        void _withheld
+        return withoutCode
     }
 
     async listForCompetition(competitionId: string) {
@@ -200,7 +219,7 @@ export class TeamsService {
             select: { teamId: true },
         })
 
-        return membership ? this.findOne(membership.teamId) : null
+        return membership ? this.findOne(membership.teamId, userId) : null
     }
 
     private async requireCaptain(teamId: string, userId: string) {
@@ -217,6 +236,26 @@ export class TeamsService {
         }
 
         return team
+    }
+
+    /// Leaving, disbanding and removing are refused once the competition is live.
+    ///
+    /// Deleting a team sets `ScoreEvent.teamId` to null, so a disband mid-round
+    /// silently erases the team from the standings — points the members earned
+    /// together simply vanish from the team board. Joining is still allowed (a
+    /// latecomer does no harm), and captaincy can still be transferred, which is
+    /// what an organizer needs when a captain goes missing mid-event.
+    private async assertMembershipMutable(teamId: string): Promise<void> {
+        const team = await this.prisma.team.findUnique({
+            where: { id: teamId },
+            select: { competition: { select: { state: true } } },
+        })
+
+        if (team?.competition.state === CompetitionState.LIVE) {
+            throw new ForbiddenException(
+                'Team membership is locked while the competition is live'
+            )
+        }
     }
 
     private async assertJoinable(competitionId: string, userId: string): Promise<void> {

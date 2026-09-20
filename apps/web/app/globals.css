@@ -56,6 +56,18 @@
   --grain-opacity: 0.035;
   --key-light: rgba(45, 147, 140, 0.2);
   --counter-light: rgba(252, 118, 6, 0.06);
+
+  /* The arena illustration (components/arena.tsx). Its sky sits a shade
+     deeper than the page so the stage reads as its own space, and the tier
+     faces are two navies one step apart — enough to separate steps, not so
+     much that they band. */
+  --arena-sky-top: #0e1530;
+  --arena-sky-bottom: #05070f;
+  --arena-tier: #151d36;
+  --arena-tier-deep: #0c1226;
+  --arena-wall-shadow: #05070f;
+  --arena-ring: rgba(45, 147, 140, 0.34);
+  --arena-dust: rgba(199, 210, 232, 0.9);
 }
 
 /*
@@ -95,6 +107,16 @@
   --grain-opacity: 0.02;
   --key-light: rgba(45, 147, 140, 0.12);
   --counter-light: rgba(252, 118, 6, 0.05);
+
+  /* In daylight the stage is a pale field with darker stands; the ring and
+     dust go dark-on-light. The deep teal keeps the rims legible on white. */
+  --arena-sky-top: #f7f9fd;
+  --arena-sky-bottom: #e3e9f4;
+  --arena-tier: #d9e1ee;
+  --arena-tier-deep: #c3cfe0;
+  --arena-wall-shadow: #a9b6cb;
+  --arena-ring: rgba(10, 124, 120, 0.3);
+  --arena-dust: rgba(15, 23, 42, 0.55);
 }
 
 @layer base {
@@ -295,6 +317,32 @@
     Nodes sit at the major intersections, and the whole thing is radially masked
     so it dissolves rather than stopping at a hard edge.
   */
+  /*
+    The landing page's sky (components/sky.tsx). Covers the body's graph paper
+    entirely: a deep top-to-bottom gradient, one teal key light where the arena
+    sits, a faint warm counter-light low on the opposite side, then the same
+    film grain the rest of the app wears — noise is what keeps a gradient from
+    reading as a screen saver.
+  */
+  .sky {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(1100px 700px at 72% 22%, var(--key-light), transparent 62%),
+      radial-gradient(700px 500px at 6% 96%, var(--counter-light), transparent 64%),
+      linear-gradient(to bottom, var(--arena-sky-top), var(--arena-sky-bottom));
+  }
+
+  .sky::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
   .grid-field {
     background-image:
       radial-gradient(circle at 0 0, var(--graph-node) 1.2px, transparent 1.7px),

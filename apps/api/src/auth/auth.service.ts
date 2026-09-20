@@ -10,8 +10,10 @@ import { randomBytes } from 'node:crypto';
 import { AppConfigService } from '../config/config.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { AuditService } from '../audit/audit.service';
+import type { RequestContext } from '../common/request-context';
 import { passwordResetEmail, verificationEmail } from '../mail/mail.templates';
-import { TokenService, type IssuedTokens } from './token.service';
+import { TokenService, type IssuedTokens, type RotatedTokens } from './token.service';
 import type {
   ForgotPasswordDto,
   LoginDto,
@@ -43,6 +45,7 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly mail: MailService,
     private readonly config: AppConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
@@ -84,7 +87,7 @@ export class AuthService {
     return { message: 'Check your inbox to verify your account.' };
   }
 
-  async login(dto: LoginDto): Promise<AuthenticatedResult> {
+  async login(dto: LoginDto, ctx: RequestContext): Promise<AuthenticatedResult> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       select: {
@@ -105,16 +108,30 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // A locked account answers exactly like a wrong password, and takes as long.
+    // A distinct 403 here told an attacker two things: that the email exists,
+    // and that five guesses would lock a victim out for fifteen minutes.
+    //
+    // The cost is that the legitimate owner is not told either; for fifteen
+    // minutes a correct password reads as wrong. A lockout email would close
+    // that gap without reopening the oracle — it is not sent today.
     if (user.lockedUntil && user.lockedUntil > new Date()) {
-      throw new ForbiddenException(
-        'Account temporarily locked after repeated failed sign-in attempts. Try again shortly.',
-      );
+      await bcrypt.compare(dto.password, DUMMY_HASH);
+      await this.audit.record({
+        actorId: user.id,
+        action: 'auth.login.refused_locked',
+        entityType: 'User',
+        entityId: user.id,
+        ipAddress: ctx.ip,
+        userAgent: ctx.userAgent,
+      });
+      throw new UnauthorizedException('Invalid email or password');
     }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
 
     if (!passwordMatches) {
-      await this.recordFailedAttempt(user.id, user.failedLoginAttempts);
+      await this.recordFailedAttempt(user.id, user.failedLoginAttempts, ctx);
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -125,6 +142,18 @@ export class AuthService {
     await this.prisma.user.update({
       where: { id: user.id },
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+    });
+
+    // Participant-side auth events were unrecorded: reconstructing a
+    // compromised account rested on `lastLoginAt` alone. Every outcome now
+    // leaves a row with the IP and client that produced it.
+    await this.audit.record({
+      actorId: user.id,
+      action: 'auth.login.success',
+      entityType: 'User',
+      entityId: user.id,
+      ipAddress: ctx.ip,
+      userAgent: ctx.userAgent,
     });
 
     const tokens = await this.tokens.issue(user);
@@ -141,7 +170,7 @@ export class AuthService {
     };
   }
 
-  async refresh(presentedToken: string): Promise<IssuedTokens> {
+  async refresh(presentedToken: string): Promise<RotatedTokens> {
     return this.tokens.rotate(presentedToken);
   }
 
@@ -193,6 +222,17 @@ export class AuthService {
     if (user) {
       const rawToken = randomBytes(32).toString('base64url');
 
+      // One live reset link per account. Requesting again supersedes the
+      // previous one rather than leaving several 60-minute tokens valid.
+      await this.prisma.verificationToken.updateMany({
+        where: {
+          userId: user.id,
+          type: VerificationTokenType.PASSWORD_RESET,
+          usedAt: null,
+        },
+        data: { usedAt: new Date() },
+      });
+
       await this.prisma.verificationToken.create({
         data: {
           userId: user.id,
@@ -209,7 +249,7 @@ export class AuthService {
     return { message: 'If that email is registered, a reset link is on its way.' };
   }
 
-  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
+  async resetPassword(dto: ResetPasswordDto, ctx: RequestContext): Promise<{ message: string }> {
     const record = await this.prisma.verificationToken.findUnique({
       where: { tokenHash: TokenService.hash(dto.token) },
     });
@@ -240,10 +280,23 @@ export class AuthService {
     // token cannot survive the reset that was meant to lock the attacker out.
     await this.tokens.revokeAllForUser(record.userId);
 
+    await this.audit.record({
+      actorId: record.userId,
+      action: 'auth.password.reset',
+      entityType: 'User',
+      entityId: record.userId,
+      ipAddress: ctx.ip,
+      userAgent: ctx.userAgent,
+    });
+
     return { message: 'Password updated. You can now sign in.' };
   }
 
-  private async recordFailedAttempt(userId: string, currentCount: number): Promise<void> {
+  private async recordFailedAttempt(
+    userId: string,
+    currentCount: number,
+    ctx: RequestContext,
+  ): Promise<void> {
     const attempts = currentCount + 1;
     const shouldLock = attempts >= MAX_FAILED_ATTEMPTS;
 
@@ -255,6 +308,16 @@ export class AuthService {
           ? new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000)
           : null,
       },
+    });
+
+    await this.audit.record({
+      actorId: userId,
+      action: shouldLock ? 'auth.login.locked' : 'auth.login.failed',
+      entityType: 'User',
+      entityId: userId,
+      metadata: { attempt: attempts },
+      ipAddress: ctx.ip,
+      userAgent: ctx.userAgent,
     });
 
     if (shouldLock) {

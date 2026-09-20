@@ -122,14 +122,39 @@ describe('TokenService', () => {
         ...over,
       });
 
-      it('issues a working session for a replay inside the window', async () => {
+      it('renews the access token for a replay inside the window', async () => {
         const prisma = makePrisma(justRotated());
         const service = new TokenService(jwt, prisma.asPrisma, config, audit);
 
         const issued = await service.rotate('same-token-from-another-tab');
 
         expect(issued.accessToken).toBeTruthy();
-        expect(issued.refreshToken).toBeTruthy();
+      });
+
+      it('does not mint a new refresh token for a replay', async () => {
+        // Each grace replay used to add a live refresh token to the family — so
+        // a stolen token replayed within the window earned its own persistent
+        // session. The losing tab only needs an access token; the browser
+        // already holds the winner's refresh cookie.
+        const prisma = makePrisma(justRotated());
+        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+        const issued = await service.rotate('same-token-from-another-tab');
+
+        expect(issued.refreshToken).toBeNull();
+        expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+      });
+
+      it('replaying three times yields three access tokens and zero refresh rows', async () => {
+        const prisma = makePrisma(justRotated());
+        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+        await service.rotate('t');
+        await service.rotate('t');
+        await service.rotate('t');
+
+        expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+        expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
       });
 
       it('does not revoke the family for a replay inside the window', async () => {
@@ -141,14 +166,6 @@ describe('TokenService', () => {
         expect(prisma.refreshToken.updateMany).not.toHaveBeenCalled();
       });
 
-      it('keeps the replay in the same family', async () => {
-        const prisma = makePrisma(justRotated());
-        const service = new TokenService(jwt, prisma.asPrisma, config, audit);
-
-        await service.rotate('same-token-from-another-tab');
-
-        expect(createdData(prisma.refreshToken.create).familyId).toBe('family-1');
-      });
 
       it('refuses grace to a token revoked by logout rather than rotation', async () => {
         // No replacement recorded means it was revoked deliberately, so a replay
@@ -185,7 +202,8 @@ describe('TokenService', () => {
         where: { id: 'rt-1' },
         data: {
           revokedAt: expect.any(Date),
-          replacedByTokenHash: TokenService.hash(issued.refreshToken),
+          // A genuine rotation always mints a replacement; only grace replays return null.
+          replacedByTokenHash: TokenService.hash(issued.refreshToken!),
         },
       });
     });

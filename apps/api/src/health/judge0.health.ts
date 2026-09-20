@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { AppConfigService } from '../config/config.service';
 
 @Injectable()
 export class Judge0HealthIndicator {
+  private readonly logger = new Logger(Judge0HealthIndicator.name);
+
   constructor(
     private readonly config: AppConfigService,
     private readonly indicator: HealthIndicatorService,
@@ -35,7 +37,11 @@ export class Judge0HealthIndicator {
       const info = (await about.json().catch(() => ({}))) as { version?: string };
       return check.up({ version: info.version });
     } catch (error) {
-      return check.down({ message: (error as Error).message });
+      // The real message names hosts and ports ("connect ECONNREFUSED
+      // 10.0.1.5:5432"). /health is public and unauthenticated, so it says
+      // only that the dependency is down; the detail goes to the log.
+      this.logger.warn(`Health check failed: ${(error as Error).message}`);
+      return check.down({ message: 'unreachable' });
     }
   }
 

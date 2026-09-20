@@ -8,13 +8,13 @@ import {
   ParticipationMode,
   Prisma,
   RevealMode,
-  RoundState,
   RoundType,
   ScoreSource,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { relabel, seededShuffle } from '../common/shuffle';
 import { RoundsService } from '../rounds/rounds.service';
+import { hasClosed } from '../rounds/round-state';
 import { ScoringService } from '../scoring/scoring.service';
 import { gradeMcq } from '../scoring/scoring';
 import type { SubmitMcqAnswerDto } from './dto/mcq-answer.dto';
@@ -185,7 +185,7 @@ export class McqService {
       throw new ForbiddenException('Answers are not published for this round');
     }
 
-    if (round.state !== RoundState.COMPLETED && round.state !== RoundState.ARCHIVED) {
+    if (!hasClosed(round.state)) {
       throw new ForbiddenException('Results are published once the round closes');
     }
 

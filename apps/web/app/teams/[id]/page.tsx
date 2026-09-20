@@ -256,7 +256,7 @@ function TeamView({ id }: { id: string }) {
         </div>
       </header>
 
-      {isMember && (
+      {isMember && team.code && (
         <section className="panel hairline bracketed mb-5 flex flex-wrap items-center justify-between gap-4 p-5">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
@@ -270,7 +270,7 @@ function TeamView({ id }: { id: string }) {
           <Button
             variant="secondary"
             onClick={() => {
-              void navigator.clipboard.writeText(team.code);
+              void navigator.clipboard.writeText(team.code!);
               setCopied(true);
               toast.success('Invite code copied');
               setTimeout(() => setCopied(false), 2000);

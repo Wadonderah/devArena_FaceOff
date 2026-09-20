@@ -15,5 +15,14 @@
     "db:seed": "pnpm --filter api db:seed",
     "infra:up": "docker compose -f docker-compose.dev.yml up -d",
     "infra:down": "docker compose -f docker-compose.dev.yml down"
+  },
+  "pnpm": {
+    "overrides": {
+      "qs": ">=6.16.0",
+      "multer": ">=2.3.0",
+      "postcss": ">=8.5.23",
+      "sharp": ">=0.35.4",
+      "deepmerge-ts": ">=8.0.0"
+    }
   }
 }

@@ -37,6 +37,9 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
         { name: 'default', ttl: 60_000, limit: 100 },
         { name: 'burst', ttl: 60_000, limit: 100 },
         { name: 'sustained', ttl: 10_000, limit: 100 },
+        // Keyed per (IP, email) by UserThrottlerGuard. The global ceiling is
+        // deliberately loose so it only bites on the auth routes that tighten it.
+        { name: 'account', ttl: 60_000, limit: 1000 },
       ],
     }),
     MailModule,

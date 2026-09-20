@@ -46,8 +46,8 @@ export class TeamsController {
   }
 
   @Get('teams/:id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.teams.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser('id') userId: string) {
+    return this.teams.findOne(id, userId);
   }
 
   @Post('teams/:id/leave')

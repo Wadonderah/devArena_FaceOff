@@ -235,7 +235,8 @@ export interface Team {
   id: string;
   competitionId: string;
   name: string;
-  code: string;
+  /// Present only when the viewer is a member — it is the join credential.
+  code?: string;
   avatarUrl: string | null;
   captainId: string;
   createdAt: string;

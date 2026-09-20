@@ -19,6 +19,7 @@ import {
 } from 'class-validator';
 import { Category, Difficulty } from '@prisma/client';
 import { ValidateLanguageMap } from '../../common/validators/language-map.validator';
+import { ValidateContextFiles } from '../../common/validators/context-files.validator';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -216,6 +217,7 @@ export class CreateDebuggingChallengeDto {
   /// Optional read-only supporting files, keyed by filename.
   @IsOptional()
   @IsObject()
+  @ValidateContextFiles()
   contextFiles?: Record<string, string>;
 
   @IsOptional()

@@ -172,8 +172,28 @@ export class Judge0Client {
 
 const b64 = (value: string): string => Buffer.from(value, 'utf8').toString('base64');
 
-const unb64 = (value: string | null | undefined): string | null =>
-  value ? Buffer.from(value, 'base64').toString('utf8') : null;
+/// Judge0's own ceiling is `max_file_size` (up to 1 MB per stream, per test).
+/// Nothing downstream needs more than a screenful: the participant reads the
+/// first lines of a diff, and the database should not hold a megabyte of
+/// `print("x" * 10**6)` per visible case per attempt. Truncation happens at
+/// the one place output enters the process, so every consumer is bounded.
+export const MAX_OUTPUT_BYTES = 16 * 1024;
+
+const unb64 = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+
+  const bytes = Buffer.from(value, 'base64');
+  if (bytes.length <= MAX_OUTPUT_BYTES) return bytes.toString('utf8');
+
+  // Back up to a character boundary before cutting. A UTF-8 continuation byte
+  // is 10xxxxxx; stepping past any of those lands on the start of a character,
+  // so the slice never ends mid-sequence and never decodes to U+FFFD.
+  let end = MAX_OUTPUT_BYTES;
+  while (end > 0 && (bytes[end] & 0xc0) === 0x80) end -= 1;
+
+  const kept = bytes.subarray(0, end).toString('utf8');
+  return `${kept}\n… [output truncated at ${MAX_OUTPUT_BYTES / 1024} KB]`;
+};
 
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));

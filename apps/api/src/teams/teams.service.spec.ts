@@ -46,7 +46,12 @@ function build(over: Overrides = {}) {
       count: jest.fn().mockResolvedValue(over.memberCount ?? 1),
     },
     team: {
-      findUnique: jest.fn().mockResolvedValue('team' in over ? over.team : null),
+      // Every team belongs to a competition; membership changes read its state.
+      findUnique: jest.fn().mockResolvedValue(
+        'team' in over && over.team
+          ? { competition: { state: COMPETITION.state }, ...(over.team as object) }
+          : null,
+      ),
       findMany: jest.fn().mockResolvedValue([]),
       create: teamCreate,
       update: teamUpdate,
@@ -306,5 +311,86 @@ describe('TeamsService.leave', () => {
     expect(memberDelete).toHaveBeenCalledWith({ where: { id: 'tm-2' } });
     expect(teamDelete).not.toHaveBeenCalled();
     expect(result).toEqual({ left: true, disbanded: false });
+  });
+});
+
+describe('TeamsService.findOne — join code visibility', () => {
+  // The code is a bearer credential. It was once returned to every caller, and
+  // team ids are listable, so a rival could read any team's code and fill it.
+  const TEAM = {
+    id: 'team-1',
+    name: 'Phoenix',
+    code: 'ABC234',
+    competitionId: 'comp-1',
+    captainId: 'user-1',
+    members: [{ userId: 'user-1' }, { userId: 'user-2' }],
+  };
+
+  it('returns the code to a member', async () => {
+    const { service, prisma } = build();
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(TEAM);
+
+    const team = await service.findOne('team-1', 'user-2');
+
+    expect(team).toHaveProperty('code', 'ABC234');
+  });
+
+  it('omits the code entirely for a non-member', async () => {
+    const { service, prisma } = build();
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(TEAM);
+
+    const team = await service.findOne('team-1', 'rival-9');
+
+    // Omitted, not nulled: the shape itself must not reveal that a code exists.
+    expect(team).not.toHaveProperty('code');
+    expect(team).toMatchObject({ id: 'team-1', name: 'Phoenix' });
+  });
+
+  it('still lists members for a non-member (names are not secret)', async () => {
+    const { service, prisma } = build();
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(TEAM);
+
+    const team = await service.findOne('team-1', 'rival-9');
+
+    expect(team.members).toHaveLength(2);
+  });
+});
+
+describe('TeamsService — membership is locked while the competition is live', () => {
+  // Deleting a team nulls ScoreEvent.teamId, so a mid-round disband erases the
+  // team from the standings. Joining and captaincy transfer stay open.
+  const liveTeam = {
+    id: 'team-1',
+    competitionId: 'comp-1',
+    captainId: 'user-1',
+    competition: { state: CompetitionState.LIVE },
+    _count: { members: 2 },
+    members: [{ userId: 'user-1' }, { userId: 'user-2' }],
+  };
+
+  it('refuses leave', async () => {
+    const { service } = build({ team: liveTeam, membership: { id: 'tm-2' } });
+    await expect(service.leave('team-1', 'user-2')).rejects.toThrow(ForbiddenException);
+    await expect(service.leave('team-1', 'user-2')).rejects.toThrow(/locked while/);
+  });
+
+  it('refuses disband', async () => {
+    const { service, teamDelete } = build({ team: liveTeam });
+    await expect(service.disband('team-1', 'user-1')).rejects.toThrow(ForbiddenException);
+    expect(teamDelete).not.toHaveBeenCalled();
+  });
+
+  it('refuses removing a member', async () => {
+    const { service, memberDelete } = build({ team: liveTeam, membership: { id: 'tm-2' } });
+    await expect(service.removeMember('team-1', 'user-1', 'user-2')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(memberDelete).not.toHaveBeenCalled();
+  });
+
+  it('still allows captaincy transfer', async () => {
+    const { service, teamUpdate } = build({ team: liveTeam, membership: { id: 'tm-2' } });
+    await service.transferCaptaincy('team-1', 'user-1', 'user-2');
+    expect(teamUpdate).toHaveBeenCalled();
   });
 });

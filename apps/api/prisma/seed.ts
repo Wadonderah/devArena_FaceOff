@@ -205,8 +205,7 @@ async function main(): Promise<void> {
         codingChallenge: {
           create: {
             statement: seed.statement,
-            starterCodePy: seed.starterCodePy,
-            starterCodeJs: seed.starterCodeJs,
+            starterCode: { PYTHON: seed.starterCodePy, JAVASCRIPT: seed.starterCodeJs },
             testCases: {
               create: seed.tests.map(([stdin, expectedOutput, isHidden], orderIndex) => ({
                 stdin,
