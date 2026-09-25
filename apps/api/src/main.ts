@@ -49,8 +49,9 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api', { exclude: ['health', 'health/live'] });
   app.enableShutdownHooks();
 
-  const port = config.get('PORT');
-  await app.listen(port, '0.0.0.0');
+    const port = config.get('PORT');
+    app.enableShutdownHooks();
+    await app.listen(port, '0.0.0.0');
 
   new Logger('Bootstrap').log(`API listening on port ${port}`);
 }

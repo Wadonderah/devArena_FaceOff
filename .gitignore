@@ -27,6 +27,7 @@ ui_inspo/
 
 # Redis snapshots — a local dump belongs to the machine, not the repo
 *.rdb
+*.dump
 
 # Reference images for the landing redesign, not product assets
 apps/web/ui_inspo/
