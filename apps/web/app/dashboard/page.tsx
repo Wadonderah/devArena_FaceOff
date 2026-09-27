@@ -10,17 +10,45 @@ import { TeamCard } from '@/components/team-card';
 import { useCompetitions, useCurrentUser, useProfile } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
+import { useMutation } from '@tanstack/react-query';
+import { api, ApiError } from '@/lib/api';
+import { useToast } from '@/components/ui/toast';
 
+/// Shown until the address is confirmed.
+///
+/// Signing in without verifying is allowed on purpose — you can look around,
+/// but VerifiedEmailGuard blocks joining, teams and every submission path. The
+/// resend button matters because a verification email can fail to arrive for
+/// reasons the participant cannot see or fix, and until now the endpoint
+/// existed with nothing in the UI calling it.
 function VerifyBanner() {
   const { data: user } = useCurrentUser();
+  const toast = useToast();
+
+  const resend = useMutation({
+    mutationFn: () => api('/auth/resend-verification', { method: 'POST' }),
+    onSuccess: () =>
+      toast.success('Verification email sent', `Check the inbox for ${user?.email ?? 'your address'}.`),
+    onError: (error) =>
+      toast.error(
+        'Could not send the email',
+        // The endpoint allows three per hour; the server's message says so
+        // precisely, and a generic failure here would just invite retries.
+        error instanceof ApiError ? error.displayMessage : undefined,
+      ),
+  });
+
   if (!user || user.emailVerified) return null;
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3">
       <Badge tone="warn">Action needed</Badge>
-      <p className="text-[14px] text-ink-dim">
+      <p className="flex-1 text-[14px] text-ink-dim">
         Verify your email to join competitions and submit answers.
       </p>
+      <Button size="sm" variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>
+        Resend email
+      </Button>
     </div>
   );
 }
