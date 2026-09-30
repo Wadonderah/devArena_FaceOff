@@ -86,28 +86,45 @@ export default function LandingPage() {
         */}
         <div
           aria-hidden
-          className="arena-backdrop pointer-events-none absolute bottom-0 left-1/2 z-0 w-[200%] max-w-none -translate-x-1/2 translate-y-[26%] opacity-[0.55] sm:w-[155%] lg:w-[120%]"
+          className="arena-backdrop pointer-events-none absolute bottom-0 left-1/2 z-0 w-[200%] max-w-none -translate-x-1/2 translate-y-[22%] sm:w-[150%] lg:w-[112%]"
         >
           <Arena backdrop />
         </div>
 
-        <div className="relative mx-auto flex max-w-6xl justify-end px-5 pt-5">
+        <div aria-hidden className="hero-scrim pointer-events-none absolute inset-0 z-0" />
+
+        <div className="relative z-10 mx-auto flex max-w-6xl justify-end px-5 pt-5">
           <ThemeToggle />
         </div>
 
         <div className="relative z-10 mx-auto flex min-h-[86vh] max-w-6xl flex-col justify-center px-5 pt-8 pb-28 sm:pt-12 lg:pb-36">
-          <div className="max-w-xl">
+          {/*
+            Centred on the stage. The arena is radially symmetric, so copy
+            pushed to one side fought it — Parlo and mantality both centre over
+            their backdrop for the same reason. The eyebrow loses its left rule
+            and becomes a pill, since a left border has nothing to sit against
+            once the block is centred.
+          */}
+          <div className="mx-auto max-w-3xl text-center">
             <div>
-              <span className="inline-flex items-center gap-2 border-l-2 border-live pl-3 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-dim">
+              <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface-1/60 px-3.5 py-1.5 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-dim backdrop-blur-sm">
+                <span aria-hidden className="size-1.5 rounded-full bg-live" />
                 Season 1 · Akwannya Hub
               </span>
 
               {/* Three beats, stacked. The accent lands on one word, on the last
                   line — a tricolour gradient across the whole headline is the
                   single most recognisable stock-template move. */}
-              <h1 className="mt-6 font-display text-[clamp(2.75rem,7vw,4.5rem)] font-bold leading-[0.98] tracking-[-0.035em]">
-                <span className="block text-ink-dim">Learn.</span>
-                <span className="block text-ink">Build.</span>
+              {/*
+                One wide line rather than three stacked words. Stacked, each
+                line held a single short word — a tall, narrow column, which is
+                what actually left the flanks of a centred hero empty. Set
+                across, the block spans the stage, and the second line carries
+                the extra length without a separate section crowding the arena.
+              */}
+              <h1 className="mt-7 font-display text-[clamp(2rem,5.6vw,3.9rem)] font-bold leading-[1.06] tracking-[-0.035em]">
+                <span className="text-ink-dim">Learn.</span>{' '}
+                <span className="text-ink">Build.</span>{' '}
                 <span className="relative inline-block text-brand-bright">
                   Compete.
                   <span
@@ -115,14 +132,20 @@ export default function LandingPage() {
                     className="absolute -bottom-1 left-0 h-[3px] w-full rounded-full bg-live"
                   />
                 </span>
+                {/* ink-dim, not ink-faint: this is the headline continuing,
+                    not a caption, and it sits over the busiest part of the
+                    backdrop. */}
+                <span className="mt-4 block font-medium text-ink-dim">
+                  Then do it again, faster.
+                </span>
               </h1>
 
-              <p className="mt-8 max-w-md text-[17px] leading-relaxed text-ink-dim">
+              <p className="mx-auto mt-8 max-w-lg text-[17px] leading-relaxed text-ink-dim">
                 A live competition for software engineers, not a practice site. Real rounds on a
                 real schedule, teams head to head, and a leaderboard the whole room watches move.
               </p>
 
-              <div className="mt-9 flex flex-wrap items-center gap-3">
+              <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
                 <Link
                   href="/register"
                   className="glow-brand inline-flex h-12 items-center gap-2 rounded-full bg-brand px-6 text-[15px] font-medium text-white transition-colors hover:bg-brand-bright"
@@ -138,22 +161,7 @@ export default function LandingPage() {
                 </Link>
               </div>
 
-              <dl className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-line pt-5">
-                {[
-                  ['Entry', 'Free'],
-                  ['Formats', 'Solo & team'],
-                  ['Languages', 'Eight, your pick'],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <dt className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-faint">
-                      {label}
-                    </dt>
-                    <dd className="mt-0.5 text-[14px] text-ink">{value}</dd>
-                  </div>
-                ))}
-              </dl>
             </div>
-
           </div>
         </div>
       </section>
