@@ -11,10 +11,12 @@
 */
 @theme {
   /* Navy surfaces, matching the dark gradient sections on akwannya-hub.org. */
-  --color-surface-0: #0b1020;
-  --color-surface-1: #10172b;
-  --color-surface-2: #17203a;
-  --color-surface-3: #2a3556;
+  --color-surface-0: #070b16;
+  --color-surface-1: #0c1322;
+  --color-surface-2: #121b31;
+  --color-surface-3: #222d4b;
+  /* Innermost nesting step: a card inside a panel inside a page. */
+  --color-surface-4: #2c3a5e;
   --color-line: #2a3556;
   --color-line-bright: #3b4a72;
 
@@ -40,11 +42,14 @@
   --color-warn: #fda85c;
   --color-danger: #dc2626;
 
-  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-family), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', monospace;
 
-  --radius-card: 14px;
+  /* Rounder than before. All four references sit noticeably softer than 14px,
+     and radius is one of the cheapest polish levers there is. */
+  --radius-card: 18px;
+  --radius-panel: 24px;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -61,11 +66,15 @@
      deeper than the page so the stage reads as its own space, and the tier
      faces are two navies one step apart — enough to separate steps, not so
      much that they band. */
-  --arena-sky-top: #0e1530;
-  --arena-sky-bottom: #05070f;
-  --arena-tier: #151d36;
-  --arena-tier-deep: #0c1226;
-  --arena-wall-shadow: #05070f;
+  --arena-sky-top: #0a1024;
+  --arena-sky-bottom: #03050c;
+  --arena-tier: #101829;
+  --arena-tier-deep: #070c1a;
+  --arena-wall-shadow: #03050c;
+  --arena-backdrop-opacity: 0.55;
+  --hero-scrim: 7, 11, 22;
+  --hero-scrim-a1: 0.94;
+  --hero-scrim-a2: 0.84;
   --arena-ring: rgba(45, 147, 140, 0.34);
   --arena-dust: rgba(199, 210, 232, 0.9);
 }
@@ -82,12 +91,18 @@
   --color-surface-1: #ffffff;
   --color-surface-2: #f1f5f9;
   --color-surface-3: #e8edf5;
+  --color-surface-4: #dde5f0;
   --color-line: #dbe3ef;
   --color-line-bright: #c2cede;
 
   --color-ink: #0f172a;
   --color-ink-dim: #47566e;
-  --color-ink-faint: #7c8aa3;
+  /*
+    Darkened from #7c8aa3, which measured 3.31:1 against the light surface —
+    under the 4.5:1 AA floor for body text, and visibly washed out once the
+    arena backdrop showed through behind it. This is 5.13:1.
+  */
+  --color-ink-faint: #5b6b85;
 
   --color-brand: #0a7c78;
   --color-brand-bright: #086560;
@@ -111,11 +126,20 @@
   /* In daylight the stage is a pale field with darker stands; the ring and
      dust go dark-on-light. The deep teal keeps the rims legible on white. */
   --arena-sky-top: #f7f9fd;
-  --arena-sky-bottom: #e3e9f4;
-  --arena-tier: #d9e1ee;
-  --arena-tier-deep: #c3cfe0;
+  --arena-sky-bottom: #dde5f2;
+  --arena-tier: #ccd8e9;
+  --arena-tier-deep: #aebfd6;
   --arena-wall-shadow: #a9b6cb;
-  --arena-ring: rgba(10, 124, 120, 0.3);
+  --arena-backdrop-opacity: 0.62;
+  /*
+    Held higher than dark. A pale backdrop showing through pale text costs more
+    legibility than a dark one does — the arena's rings and text are closer in
+    value here, so the copy needs more of the page's own surface under it.
+  */
+  --hero-scrim: 247, 249, 253;
+  --hero-scrim-a1: 0.97;
+  --hero-scrim-a2: 0.92;
+  --arena-ring: rgba(10, 124, 120, 0.42);
   --arena-dust: rgba(15, 23, 42, 0.55);
 }
 
@@ -144,31 +168,20 @@
     division — plus the faint marks where you'd plot a point. A single-scale grid
     reads as a texture; two scales read as a surface you could measure on.
   */
+  /*
+    The app's surface. Previously two-scale graph paper with plotted nodes,
+    which read as a technical texture pinned behind the interface rather than a
+    space the interface sits in — and it fought the arena on the landing page.
+
+    Now: one off-centre key light, a warm counter-light opposite for depth, and
+    film grain. No repeating rule, so nothing competes with a table or a form.
+  */
   body {
     position: relative;
     background:
-      /* Off-centre key light. Asymmetry is what stops it looking machine-made. */
       radial-gradient(1200px 620px at 78% -12%, var(--key-light), transparent 60%),
-      /* Small warm counter-light, low and opposite, for depth. */
-      radial-gradient(560px 380px at 8% 12%, var(--counter-light), transparent 62%),
-      /* Plot nodes at every major intersection. */
-      radial-gradient(circle at 0 0, var(--graph-node) 1.1px, transparent 1.6px),
-      /* Major rules, every 5th division. */
-      linear-gradient(to right, var(--graph-major) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--graph-major) 1px, transparent 1px),
-      /* Minor rules. */
-      linear-gradient(to right, var(--graph-minor) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--graph-minor) 1px, transparent 1px),
-      var(--color-surface-0);
-    background-size:
-      auto,
-      auto,
-      120px 120px,
-      120px 120px,
-      120px 120px,
-      24px 24px,
-      24px 24px,
-      auto;
+      radial-gradient(620px 420px at 4% 104%, var(--counter-light), transparent 64%),
+      linear-gradient(to bottom, var(--arena-sky-top), var(--color-surface-0) 62%);
     background-attachment: fixed;
     color: var(--color-ink);
     font-family: var(--font-sans);
@@ -197,10 +210,24 @@
     z-index: 1;
   }
 
+  /*
+    Display type is set lighter and tighter than before. The references all run
+    large sizes at medium weight with negative tracking; the previous 600 at
+    -0.02em read dense next to them. The hero keeps its bold treatment
+    explicitly — that is the one place weight is doing identity work.
+  */
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
-    font-weight: 600;
+    letter-spacing: -0.03em;
+    font-weight: 500;
+    line-height: 1.08;
+  }
+
+  /* Smooth scrolling, but never against a stated preference. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
   /* Visible focus is non-negotiable — keyboard users must always know where
@@ -390,4 +417,78 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+  Plain CSS, deliberately outside @layer utilities. Tailwind v4 only emits
+  single-class utilities from that layer, so the compound selectors below
+  ([data-theme] descendants, :has) were silently discarded when they lived
+  there — the class rendered on the element and matched nothing.
+*/
+/*
+  The landing page's inset frame (reference 3). Content sits in a rounded
+  container a little in from the viewport edge, floating on a deeper backdrop,
+  so the page reads as a surface rather than as the window itself.
+
+  Light mode only: on dark the effect is invisible — there is not enough
+  separation between a near-black backdrop and a near-black page — and the
+  signed-in shell has a sticky header that would fight the rounded corner.
+*/
+.page-frame {
+  border-radius: 0;
+}
+
+[data-theme='light'] .page-frame {
+  margin: 10px;
+  border-radius: 28px;
+  overflow: clip;
+}
+
+/*
+  The sky is `position: fixed`, so it spans the viewport and would paint over
+  the frame's gutter — the inset would be invisible. Insetting and rounding the
+  sky itself makes it the framed surface rather than something the frame has to
+  fight, and it stays fixed while the content scrolls past.
+*/
+[data-theme='light'] .sky {
+  inset: 10px;
+  border-radius: 28px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 18px 40px -16px rgba(15, 23, 42, 0.16);
+}
+
+[data-theme='light'] body:has(.page-frame) {
+  background: #dfe6f1;
+}
+
+/* Large containers: one step softer than a card. */
+.rounded-panel {
+  border-radius: var(--radius-panel);
+}
+
+/*
+  The arena used as a backdrop. `overflow-hidden` on the hero section would
+  otherwise cut the bowl off with a hard horizontal edge; masking it to
+  transparent at the bottom lets it fall away instead.
+*/
+.arena-backdrop {
+  opacity: var(--arena-backdrop-opacity);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 99%);
+  mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 99%);
+}
+
+/*
+  A wash of the page's own background behind the hero copy.
+
+  The arena is deliberately busy — dashed seat rows, orbit rings, a light
+  column — and text sitting directly on it loses contrast exactly where the
+  rings cross a line of type. Feathering the background back in under the copy
+  keeps the stage visible around it without asking the reader to work.
+*/
+.hero-scrim {
+  background: radial-gradient(
+    70% 78% at 50% 46%,
+    rgb(var(--hero-scrim) / var(--hero-scrim-a1)) 0%,
+    rgb(var(--hero-scrim) / var(--hero-scrim-a2)) 54%,
+    rgb(var(--hero-scrim) / 0) 88%
+  );
 }

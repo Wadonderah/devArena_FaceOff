@@ -5,6 +5,8 @@ import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/input';
+import { AuthBackdrop } from '@/components/auth-backdrop';
+import { MailCheck } from 'lucide-react';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ displayName: '', email: '', password: '' });
@@ -32,10 +34,11 @@ export default function RegisterPage() {
 
   if (sent) {
     return (
-      <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5">
-        <div className="panel hairline p-7 text-center">
+      <main id="main" className="relative isolate flex min-h-dvh flex-col justify-center overflow-hidden px-5">
+        <AuthBackdrop />
+        <div className="panel hairline relative z-10 mx-auto w-full max-w-md p-7 text-center">
           <div aria-hidden className="mx-auto grid size-11 place-items-center rounded-full bg-success/15 text-success">
-            ✓
+            <MailCheck size={20} strokeWidth={1.5} />
           </div>
           <h1 className="mt-4 text-2xl">Check your inbox</h1>
           <p className="mt-2.5 text-[15px] leading-relaxed text-ink-dim">
@@ -54,7 +57,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5 py-16">
+    <main id="main" className="relative isolate flex min-h-dvh flex-col justify-center overflow-hidden px-5 py-16">
+      <AuthBackdrop />
+
+      <div className="relative z-10 mx-auto flex w-full max-w-md flex-col">
       <h1 className="text-3xl">Create your account</h1>
       <p className="mt-2 text-[15px] text-ink-dim">
         Verify your email, join the competition, and you&apos;re in.
@@ -116,6 +122,7 @@ export default function RegisterPage() {
           Sign in
         </Link>
       </p>
+      </div>
     </main>
   );
 }

@@ -67,7 +67,7 @@ function drumPath(cx: number, cy: number, rx: number, ry: number, h: number): st
   ].join(' ');
 }
 
-export function Arena() {
+export function Arena({ backdrop = false }: { backdrop?: boolean } = {}) {
   const { teams, clock, reduceMotion } = useMockStandings();
 
   return (
@@ -116,9 +116,11 @@ export function Arena() {
           </filter>
         </defs>
 
-        {/* ── Sky ─────────────────────────────────────────────────────── */}
-        <rect width={W} height={H} fill="url(#arena-sky)" />
-        <g fill="var(--arena-dust)">
+        {/* ── Sky ───────────────────────────────────────────────────────
+            Skipped in backdrop mode: the page's own sky is already behind
+            this, and a second filled rect would show as a box edge. */}
+        {!backdrop && <rect width={W} height={H} fill="url(#arena-sky)" />}
+        <g fill="var(--arena-dust)" className={backdrop ? 'hidden' : undefined}>
           {DUST.map((d, i) => (
             <circle
               key={i}
@@ -154,7 +156,7 @@ export function Arena() {
             d={drumPath(CX, CY + RIM.dy, RIM.rx, RIM.rx * K, RIM.wall)}
             fill="url(#arena-wall)"
             stroke="var(--color-brand)"
-            strokeOpacity={0.35}
+            strokeOpacity={backdrop ? 0.55 : 0.35}
             strokeWidth={1}
           />
           <ellipse
@@ -164,10 +166,10 @@ export function Arena() {
             ry={RIM.rx * K}
             fill="var(--arena-tier)"
             stroke="var(--color-brand)"
-            strokeOpacity={0.6}
-            strokeWidth={1.2}
+            strokeOpacity={backdrop ? 0.85 : 0.6}
+            strokeWidth={backdrop ? 1.6 : 1.2}
           />
-          <SeatRow cx={CX} cy={CY + RIM.dy} rx={RIM.rx - 8} />
+          <SeatRow cx={CX} cy={CY + RIM.dy} rx={RIM.rx - 8} strong={backdrop} />
 
           {/* Each row inward: its riser (the same ellipse lifted by RISER, in
               the dark tone) and then the seat surface on top. The dark crescent
@@ -188,10 +190,10 @@ export function Arena() {
                 ry={row.rx * K}
                 fill={i % 2 ? 'var(--arena-tier-deep)' : 'var(--arena-tier)'}
                 stroke="var(--color-brand)"
-                strokeOpacity={0.45}
-                strokeWidth={1}
+                strokeOpacity={backdrop ? 0.7 : 0.45}
+                strokeWidth={backdrop ? 1.3 : 1}
               />
-              <SeatRow cx={CX} cy={CY + row.dy} rx={row.rx - 8} />
+              <SeatRow cx={CX} cy={CY + row.dy} rx={row.rx - 8} strong={backdrop} />
             </g>
           ))}
 
@@ -237,12 +239,12 @@ export function Arena() {
         {/* ── Teams ───────────────────────────────────────────────────── */}
         <g>
           {teams.map((team, rank) => (
-            <TeamNode key={team.id} team={team} rank={rank} reduce={reduceMotion} />
+            <TeamNode key={team.id} team={team} rank={rank} reduce={reduceMotion} hideLabel={backdrop} />
           ))}
         </g>
 
         {/* Round clock, bottom-left, in the same register as the console strip. */}
-        <g fontFamily="var(--font-mono)" fontSize="12" letterSpacing="0.14em">
+        <g fontFamily="var(--font-mono)" fontSize="12" letterSpacing="0.14em" className={backdrop ? 'hidden' : undefined}>
           <text x={28} y={H - 26} fill="var(--color-live)" fontWeight="600">
             LIVE · ROUND 2
           </text>
@@ -253,7 +255,7 @@ export function Arena() {
       </svg>
 
       {/* The same information, for readers who do not get the picture. */}
-      <ol className="sr-only" aria-live="off">
+      <ol className={backdrop ? 'hidden' : 'sr-only'} aria-live="off">
         {teams.map((team, i) => (
           <li key={team.id}>
             {i + 1}. {team.name}, {team.score} points
@@ -265,7 +267,7 @@ export function Arena() {
 }
 
 /// A dashed ring just inside a tier's edge: rows of seats, at this scale.
-function SeatRow({ cx, cy, rx }: { cx: number; cy: number; rx: number }) {
+function SeatRow({ cx, cy, rx, strong }: { cx: number; cy: number; rx: number; strong?: boolean }) {
   return (
     <ellipse
       cx={cx}
@@ -274,7 +276,7 @@ function SeatRow({ cx, cy, rx }: { cx: number; cy: number; rx: number }) {
       ry={rx * K}
       fill="none"
       stroke="var(--color-brand-bright)"
-      strokeOpacity={0.28}
+      strokeOpacity={strong ? 0.45 : 0.28}
       strokeWidth={2.4}
       strokeDasharray="2.5 5.5"
     />
@@ -309,10 +311,12 @@ function TeamNode({
   team,
   rank,
   reduce,
+  hideLabel,
 }: {
   team: MockTeam;
   rank: number;
   reduce: boolean | null;
+  hideLabel?: boolean;
 }) {
   const base = BASE_ANGLE[team.id] ?? 0;
   const targetRx = ORBITS[Math.min(rank, ORBITS.length - 1)];
@@ -350,10 +354,15 @@ function TeamNode({
     <motion.g style={{ x, y }}>
       {/* Far side of the ring passes behind the stadium; a halo keeps the node
           legible against tier edges without needing a second colour. */}
-      <circle r={leader ? 9 : 7} fill="var(--arena-sky-bottom)" opacity={0.85} />
       <circle
-        r={leader ? 5 : 3.6}
+        r={leader ? 9 : 7}
+        fill="var(--arena-sky-bottom)"
+        opacity={hideLabel ? 0 : 0.85}
+      />
+      <circle
+        r={hideLabel ? 2.4 : leader ? 5 : 3.6}
         fill={leader ? 'var(--color-brand-bright)' : 'var(--color-ink-dim)'}
+        opacity={hideLabel ? 0.55 : 1}
       />
       {leader && (
         <circle r={5} fill="none" stroke="var(--color-brand-bright)" strokeOpacity={0.5} strokeWidth={3} />
@@ -361,7 +370,7 @@ function TeamNode({
       <text
         x={leader ? 12 : 10}
         y={4}
-        className="hidden sm:inline"
+        className={hideLabel ? 'hidden' : 'hidden sm:inline'}
         fontFamily="var(--font-mono)"
         fontSize="11"
         letterSpacing="0.08em"

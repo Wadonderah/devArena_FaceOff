@@ -9,10 +9,11 @@ import { useCompetitions, useCurrentUser, useLogout } from '@/lib/hooks';
 import type { Team } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LayoutGrid, LogOut, Trophy, Users, Wrench } from 'lucide-react';
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/competitions', label: 'Competitions' },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { href: '/competitions', label: 'Competitions', icon: Trophy },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -38,15 +39,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const links = [
     ...NAV,
-    ...(myTeam ? [{ href: `/teams/${myTeam.id}`, label: 'My team' }] : []),
-    ...(isStaff ? [{ href: '/admin', label: 'Organizer' }] : []),
-    ...(isSuperAdmin ? [{ href: '/admin/system', label: 'System' }] : []),
+    ...(myTeam ? [{ href: `/teams/${myTeam.id}`, label: 'My team', icon: Users }] : []),
+    ...(isStaff ? [{ href: '/admin', label: 'Organizer', icon: Wrench }] : []),
+    ...(isSuperAdmin ? [{ href: '/admin/system', label: 'System', icon: Wrench }] : []),
   ];
 
   return (
     <div className="min-h-dvh flex flex-col">
-      <header className="sticky top-0 z-40 border-b border-line bg-surface-0/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
+      {/* A floating pill rather than a full-width bar with a bottom rule —
+          the shape every reference uses, and it lets the background show
+          through on both sides instead of slicing the page in two. */}
+      <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 rounded-full border border-line bg-surface-0/80 px-4 backdrop-blur-xl sm:px-5">
           <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0">
             <span
               aria-hidden
@@ -68,12 +72,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   href={link.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'rounded-lg px-3 py-1.5 text-sm transition-colors duration-150 whitespace-nowrap',
+                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors duration-150 whitespace-nowrap',
                     active
                       ? 'bg-surface-2 text-ink'
                       : 'text-ink-dim hover:bg-surface-2/60 hover:text-ink',
                   )}
                 >
+                  <link.icon aria-hidden size={15} strokeWidth={1.5} className="hidden sm:block" />
                   {link.label}
                 </Link>
               );
@@ -89,6 +94,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               size="sm"
               variant="ghost"
               loading={logout.isPending}
+              icon={<LogOut />}
               onClick={() => logout.mutate(undefined, { onSettled: () => router.push('/login') })}
             >
               Sign out

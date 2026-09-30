@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { cn } from '@/lib/cn';
+import { CircleAlert, CircleCheck, Info } from 'lucide-react';
 
 type Tone = 'success' | 'error' | 'info';
 
@@ -43,7 +44,13 @@ const TONE_STYLES: Record<Tone, string> = {
   info: 'border-line-bright bg-surface-2 text-ink',
 };
 
-const ICON: Record<Tone, string> = { success: '✓', error: '✕', info: 'i' };
+// Real icons rather than ✓ ✕ i: the characters rendered at whatever weight the
+// surrounding font happened to have, which is why they never quite lined up.
+const ICON: Record<Tone, typeof CircleCheck> = {
+  success: CircleCheck,
+  error: CircleAlert,
+  info: Info,
+};
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -102,12 +109,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 TONE_STYLES[item.tone],
               )}
             >
-              <span
-                aria-hidden
-                className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border border-current text-[11px]"
-              >
-                {ICON[item.tone]}
-              </span>
+              {(() => {
+                const Icon = ICON[item.tone];
+                return <Icon aria-hidden size={18} strokeWidth={1.75} className="mt-0.5 shrink-0" />;
+              })()}
 
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-medium">{item.message}</p>
