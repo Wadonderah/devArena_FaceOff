@@ -1,3 +1,6 @@
+'use client';
+
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import { dustField } from '@/lib/dust';
 
 const W = 1440;
@@ -17,6 +20,13 @@ const DUST = dustField(150, 20260920, W, H);
 /// Fixed to the viewport so it stays put while the page scrolls past, the way
 /// a sky does. Rendered once, server-side, with a seeded field.
 export function Sky() {
+  const reduceMotion = useReducedMotion();
+  const { scrollY } = useScroll();
+  // The field drifts at roughly a third of scroll speed. The container is
+  // already `position: fixed`, so this is a transform on a composited layer —
+  // no layout, no repaint of anything behind it.
+  const y = useTransform(scrollY, [0, 2000], [0, 260]);
+
   return (
     <div className="sky" aria-hidden>
       <svg
@@ -24,11 +34,11 @@ export function Sky() {
         preserveAspectRatio="xMidYMid slice"
         className="absolute inset-0 h-full w-full"
       >
-        <g fill="var(--arena-dust)">
+        <motion.g fill="var(--arena-dust)" style={reduceMotion ? undefined : { y }}>
           {DUST.map((d, i) => (
             <circle key={i} cx={d.x} cy={d.y} r={d.r * 0.75} opacity={d.o * 0.85} />
           ))}
-        </g>
+        </motion.g>
       </svg>
     </div>
   );
