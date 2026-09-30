@@ -457,3 +457,13 @@
 .rounded-panel {
   border-radius: var(--radius-panel);
 }
+
+/*
+  The arena used as a backdrop. `overflow-hidden` on the hero section would
+  otherwise cut the bowl off with a hard horizontal edge; masking it to
+  transparent at the bottom lets it fall away instead.
+*/
+.arena-backdrop {
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 92%);
+  mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 92%);
+}

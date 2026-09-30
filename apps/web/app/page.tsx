@@ -75,12 +75,28 @@ export default function LandingPage() {
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
+        {/*
+          The arena is the backdrop now, not a panel beside the copy. It stands
+          on the horizon the sky draws, scaled past the viewport so the outer
+          orbits run off both edges — the page is inside the arena rather than
+          looking at a picture of one.
+
+          Offset right so the bowl clears the headline: the copy is
+          left-aligned, and legibility beats symmetry.
+        */}
+        <div
+          aria-hidden
+          className="arena-backdrop pointer-events-none absolute bottom-0 left-1/2 z-0 w-[200%] max-w-none -translate-x-1/2 translate-y-[26%] opacity-[0.55] sm:w-[155%] lg:w-[120%]"
+        >
+          <Arena backdrop />
+        </div>
+
         <div className="relative mx-auto flex max-w-6xl justify-end px-5 pt-5">
           <ThemeToggle />
         </div>
 
-        <div className="relative mx-auto max-w-6xl px-5 pt-8 pb-16 sm:pt-12 lg:pb-24">
-          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] lg:gap-14">
+        <div className="relative z-10 mx-auto flex min-h-[86vh] max-w-6xl flex-col justify-center px-5 pt-8 pb-28 sm:pt-12 lg:pb-36">
+          <div className="max-w-xl">
             <div>
               <span className="inline-flex items-center gap-2 border-l-2 border-live pl-3 font-mono text-[12px] uppercase tracking-[0.16em] text-ink-dim">
                 Season 1 · Akwannya Hub
@@ -102,7 +118,7 @@ export default function LandingPage() {
               </h1>
 
               <p className="mt-8 max-w-md text-[17px] leading-relaxed text-ink-dim">
-                A live competition for software engineers — not a practice site. Real rounds on a
+                A live competition for software engineers, not a practice site. Real rounds on a
                 real schedule, teams head to head, and a leaderboard the whole room watches move.
               </p>
 
@@ -138,14 +154,6 @@ export default function LandingPage() {
               </dl>
             </div>
 
-            {/* The stage. Framed like a window onto the event, and allowed to
-                run past the column on wide screens so it reads as a place
-                rather than a card. First on small screens: it is the hook. */}
-            <div className="order-first lg:order-none lg:-mr-10 xl:-mr-20">
-              <div className="overflow-hidden rounded-[22px] border border-line/70 shadow-[0_40px_90px_-40px_rgba(0,0,0,0.75)]">
-                <Arena />
-              </div>
-            </div>
           </div>
         </div>
       </section>
