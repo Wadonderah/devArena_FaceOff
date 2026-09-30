@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/input';
+import { AuthBackdrop } from '@/components/auth-backdrop';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,7 +30,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5 py-16">
+    <main id="main" className="relative isolate flex min-h-dvh flex-col justify-center overflow-hidden px-5 py-16">
+      <AuthBackdrop />
+
+      <div className="relative z-10 mx-auto flex w-full max-w-md flex-col">
       <Link href="/" className="mb-8 inline-flex items-center gap-2.5 self-start">
         <span
           aria-hidden
@@ -88,6 +92,7 @@ export default function LoginPage() {
           Create one
         </Link>
       </p>
+      </div>
     </main>
   );
 }

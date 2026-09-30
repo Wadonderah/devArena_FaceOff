@@ -10,6 +10,7 @@ import { TeamCard } from '@/components/team-card';
 import { useCompetitions, useCurrentUser, useProfile } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
+import { ArrowRight, CalendarClock, LayoutList, MailWarning, Radio, Trophy } from 'lucide-react';
 
 function VerifyBanner() {
   const { data: user } = useCurrentUser();
@@ -17,6 +18,7 @@ function VerifyBanner() {
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3">
+      <MailWarning aria-hidden size={17} strokeWidth={1.5} className="shrink-0 text-warn" />
       <Badge tone="warn">Action needed</Badge>
       <p className="text-[14px] text-ink-dim">
         Verify your email to join competitions and submit answers.
@@ -53,13 +55,18 @@ function CurrentCompetition({ id }: { id: string }) {
             <Button variant="secondary" size="sm">Leaderboard</Button>
           </Link>
           <Link href={`/competitions/${data.id}`}>
-            <Button size="sm">Open</Button>
+            <Button size="sm" icon={<ArrowRight />}>Open</Button>
           </Link>
         </div>
       </div>
 
       <div className="p-6">
-        <p className="text-[12px] uppercase tracking-[0.1em] text-ink-faint">
+        <p className="inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-ink-faint">
+          {live ? (
+            <Radio aria-hidden size={14} strokeWidth={1.5} className="text-live" />
+          ) : (
+            <CalendarClock aria-hidden size={14} strokeWidth={1.5} />
+          )}
           {live ? 'Happening now' : next ? 'Up next' : 'Rounds'}
         </p>
 
@@ -131,7 +138,8 @@ function DashboardContent() {
 
       {competitions && competitions.length > 1 && (
         <section className="mt-10">
-          <h2 className="mb-3 text-[12px] uppercase tracking-[0.1em] text-ink-faint">
+          <h2 className="mb-3 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-ink-faint">
+            <LayoutList aria-hidden size={14} strokeWidth={1.5} />
             All competitions
           </h2>
           <ul className="space-y-2">
@@ -141,7 +149,10 @@ function DashboardContent() {
                   href={`/competitions/${c.id}`}
                   className="flex items-center justify-between rounded-xl border border-line bg-surface-1 px-4 py-3 transition-colors hover:border-line-bright hover:bg-surface-2"
                 >
-                  <span className="text-[15px]">{c.name}</span>
+                  <span className="inline-flex items-center gap-2.5 text-[15px]">
+                    <Trophy aria-hidden size={15} strokeWidth={1.5} className="text-ink-faint" />
+                    {c.name}
+                  </span>
                   <CompetitionStateBadge state={c.state} />
                 </Link>
               </li>
