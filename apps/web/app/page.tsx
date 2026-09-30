@@ -1,12 +1,23 @@
 import Link from 'next/link';
 import { Arena } from '@/components/arena';
 import { Sky } from '@/components/sky';
+import { Reveal } from '@/components/reveal';
+import {
+  ArrowRight,
+  Bug,
+  Code2,
+  EyeOff,
+  ListChecks,
+  ServerCog,
+  ShieldCheck,
+} from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 // Illustrative weights — organizers set their own per competition.
 const ROUNDS = [
   {
     tag: 'Round 1',
+    icon: ListChecks,
     name: 'Knowledge Arena',
     copy: 'Multiple-choice across algorithms, data structures, databases, security and Git. Graded on the server the moment you answer, in an order nobody else sees.',
     meta: '20 questions · 10 minutes',
@@ -14,6 +25,7 @@ const ROUNDS = [
   },
   {
     tag: 'Round 2',
+    icon: Code2,
     name: 'Code Sprint',
     copy: 'Timed problems in any of eight languages, executed in a sandboxed judge against test cases you never see. Partial credit for partial progress.',
     meta: '3 problems · 45 minutes',
@@ -21,6 +33,7 @@ const ROUNDS = [
   },
   {
     tag: 'Round 3',
+    icon: Bug,
     name: 'Bug Hunt',
     copy: 'A bug report, the failing output, and broken code that compiles. Find the fault and fix it — hidden tests decide whether you actually did.',
     meta: '2 bugs · 30 minutes',
@@ -39,17 +52,17 @@ const TIMELINE = [
 
 const INTEGRITY = [
   {
-    n: 'I',
+    icon: ServerCog,
     title: 'Scored on the server',
     copy: 'Nothing the browser sends is trusted as a score. Every point is computed server-side, and every result can be reconstructed from what was recorded.',
   },
   {
-    n: 'II',
+    icon: EyeOff,
     title: 'Tests you never see',
     copy: 'Solutions are graded against hidden test cases. Reading the samples is not enough — the answer cannot be hard-coded.',
   },
   {
-    n: 'III',
+    icon: ShieldCheck,
     title: 'Isolated execution',
     copy: 'Submitted code runs sandboxed, with CPU, memory and process limits, and no network access at all.',
   },
@@ -57,7 +70,7 @@ const INTEGRITY = [
 
 export default function LandingPage() {
   return (
-    <main id="main" className="relative isolate">
+    <main id="main" className="page-frame relative isolate">
       <Sky />
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
@@ -96,13 +109,14 @@ export default function LandingPage() {
               <div className="mt-9 flex flex-wrap items-center gap-3">
                 <Link
                   href="/register"
-                  className="glow-brand inline-flex h-12 items-center rounded-xl bg-brand px-6 text-[15px] font-medium text-white transition-colors hover:bg-brand-bright"
+                  className="glow-brand inline-flex h-12 items-center gap-2 rounded-full bg-brand px-6 text-[15px] font-medium text-white transition-colors hover:bg-brand-bright"
                 >
                   Enter the arena
+                  <ArrowRight aria-hidden size={16} strokeWidth={1.75} />
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex h-12 items-center rounded-xl border border-line px-6 text-[15px] font-medium text-ink transition-colors hover:border-line-bright hover:bg-surface-2/60"
+                  className="inline-flex h-12 items-center rounded-full border border-line px-6 text-[15px] font-medium text-ink transition-colors hover:border-line-bright hover:bg-surface-2/60"
                 >
                   Sign in
                 </Link>
@@ -144,7 +158,7 @@ export default function LandingPage() {
           How a Face-Off runs
         </h2>
 
-        <ol className="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-6">
+        <Reveal><ol className="mt-8 grid gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-6">
           {TIMELINE.map((item, i) => (
             <li key={item.step} className="group relative">
               {/* Connector, drawn only between items on a single row. */}
@@ -165,7 +179,7 @@ export default function LandingPage() {
               <p className="mt-1.5 text-[14px] leading-relaxed text-ink-dim">{item.copy}</p>
             </li>
           ))}
-        </ol>
+        </ol></Reveal>
       </section>
 
       {/* ── The rounds, framed as a matchup ──────────────────────────────── */}
@@ -175,14 +189,15 @@ export default function LandingPage() {
             The rounds
           </h2>
 
-          <div className="relative mt-8 grid items-stretch gap-4 sm:grid-cols-3">
+          <Reveal className="relative mt-8 grid items-stretch gap-4 sm:grid-cols-3">
             {ROUNDS.map((round) => (
               <article
                 key={round.tag}
                 className="bracketed relative rounded-[14px] border border-line/60 bg-surface-1/60 p-7 backdrop-blur-sm transition-colors hover:border-brand/40"
               >
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="font-mono text-[12px] uppercase tracking-[0.14em] text-brand-bright">
+                  <span className="inline-flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.14em] text-brand-bright">
+                    <round.icon aria-hidden size={15} strokeWidth={1.5} />
                     {round.tag}
                   </span>
                   <span className="tabular font-display text-2xl text-ink-dim">
@@ -198,7 +213,7 @@ export default function LandingPage() {
               </article>
             ))}
 
-          </div>
+          </Reveal>
 
           <p className="mt-6 text-[14px] text-ink-faint">
             Round weights combine into one final score. Ties break on challenges completed, then
@@ -221,15 +236,17 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <div className="mt-10 grid gap-8 sm:grid-cols-3">
+        <Reveal className="mt-10 grid gap-8 sm:grid-cols-3">
           {INTEGRITY.map((item) => (
-            <div key={item.n} className="border-t border-line pt-5">
-              <span className="numeral text-[1.75rem] leading-none">{item.n}</span>
+            <div key={item.title} className="border-t border-line pt-5">
+              <span className="grid size-9 place-items-center rounded-xl border border-line bg-surface-2 text-brand-bright">
+                <item.icon aria-hidden size={17} strokeWidth={1.5} />
+              </span>
               <h3 className="mt-3 text-[16px]">{item.title}</h3>
               <p className="mt-2 text-[14px] leading-relaxed text-ink-faint">{item.copy}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* ── Close ────────────────────────────────────────────────────────── */}
@@ -245,9 +262,10 @@ export default function LandingPage() {
 
           <Link
             href="/register"
-            className="glow-brand mt-8 inline-flex h-12 items-center rounded-xl bg-brand px-7 text-[15px] font-medium text-white transition-colors hover:bg-brand-bright"
+            className="glow-brand mt-8 inline-flex h-12 items-center gap-2 rounded-full bg-brand px-7 text-[15px] font-medium text-white transition-colors hover:bg-brand-bright"
           >
             Create an account
+            <ArrowRight aria-hidden size={16} strokeWidth={1.75} />
           </Link>
 
           <p className="mt-16 font-mono text-[12px] tracking-wide text-ink-faint">

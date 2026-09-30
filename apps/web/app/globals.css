@@ -15,6 +15,8 @@
   --color-surface-1: #10172b;
   --color-surface-2: #17203a;
   --color-surface-3: #2a3556;
+  /* Innermost nesting step: a card inside a panel inside a page. */
+  --color-surface-4: #34426a;
   --color-line: #2a3556;
   --color-line-bright: #3b4a72;
 
@@ -40,11 +42,14 @@
   --color-warn: #fda85c;
   --color-danger: #dc2626;
 
-  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-family), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', monospace;
 
-  --radius-card: 14px;
+  /* Rounder than before. All four references sit noticeably softer than 14px,
+     and radius is one of the cheapest polish levers there is. */
+  --radius-card: 18px;
+  --radius-panel: 24px;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -82,6 +87,7 @@
   --color-surface-1: #ffffff;
   --color-surface-2: #f1f5f9;
   --color-surface-3: #e8edf5;
+  --color-surface-4: #dde5f0;
   --color-line: #dbe3ef;
   --color-line-bright: #c2cede;
 
@@ -197,10 +203,24 @@
     z-index: 1;
   }
 
+  /*
+    Display type is set lighter and tighter than before. The references all run
+    large sizes at medium weight with negative tracking; the previous 600 at
+    -0.02em read dense next to them. The hero keeps its bold treatment
+    explicitly — that is the one place weight is doing identity work.
+  */
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
-    font-weight: 600;
+    letter-spacing: -0.03em;
+    font-weight: 500;
+    line-height: 1.08;
+  }
+
+  /* Smooth scrolling, but never against a stated preference. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
   /* Visible focus is non-negotiable — keyboard users must always know where
@@ -390,4 +410,50 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/*
+  Plain CSS, deliberately outside @layer utilities. Tailwind v4 only emits
+  single-class utilities from that layer, so the compound selectors below
+  ([data-theme] descendants, :has) were silently discarded when they lived
+  there — the class rendered on the element and matched nothing.
+*/
+/*
+  The landing page's inset frame (reference 3). Content sits in a rounded
+  container a little in from the viewport edge, floating on a deeper backdrop,
+  so the page reads as a surface rather than as the window itself.
+
+  Light mode only: on dark the effect is invisible — there is not enough
+  separation between a near-black backdrop and a near-black page — and the
+  signed-in shell has a sticky header that would fight the rounded corner.
+*/
+.page-frame {
+  border-radius: 0;
+}
+
+[data-theme='light'] .page-frame {
+  margin: 10px;
+  border-radius: 28px;
+  overflow: clip;
+}
+
+/*
+  The sky is `position: fixed`, so it spans the viewport and would paint over
+  the frame's gutter — the inset would be invisible. Insetting and rounding the
+  sky itself makes it the framed surface rather than something the frame has to
+  fight, and it stays fixed while the content scrolls past.
+*/
+[data-theme='light'] .sky {
+  inset: 10px;
+  border-radius: 28px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 18px 40px -16px rgba(15, 23, 42, 0.16);
+}
+
+[data-theme='light'] body:has(.page-frame) {
+  background: #dfe6f1;
+}
+
+/* Large containers: one step softer than a card. */
+.rounded-panel {
+  border-radius: var(--radius-panel);
 }

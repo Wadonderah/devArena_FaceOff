@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
-import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
+import { DM_Sans, Inter, JetBrains_Mono } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
-const spaceGrotesk = Space_Grotesk({
+// DM Sans carries the display voice: geometric, and quiet enough to sit at the
+// large sizes and light weights the type scale now uses. Space Grotesk's quirk
+// fought the airiness those sizes depend on.
+const dmSans = DM_Sans({
   subsets: ['latin'],
-  variable: '--font-space-grotesk',
+  variable: '--font-display-family',
   display: 'swap',
 });
 
@@ -50,7 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       // Dark is the default so server-rendered markup has a definite theme; the
       // script below corrects it before paint if the visitor prefers otherwise.
       data-theme="dark"
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrains.variable}`}
+      className={`${dmSans.variable} ${inter.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
       <head>
