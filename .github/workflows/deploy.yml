@@ -21,6 +21,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # TEMPORARY. Prints the identity GitHub is actually presenting to AWS, so
+      # the trust policy can be matched against fact instead of assumption.
+      # Only the decoded claims are printed, never the token itself: the raw JWT
+      # is a bearer credential and must not reach the logs.
+      - name: Show the OIDC subject being sent
+        run: |
+          echo "github.repository = ${{ github.repository }}"
+          echo "github.ref        = ${{ github.ref }}"
+          TOKEN=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            | jq -r '.value')
+          # JWT payload is base64url with the padding stripped; put it back.
+          PAYLOAD=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+')
+          PAYLOAD="$PAYLOAD$(printf '=%.0s' $(seq $(( (4 - ${#PAYLOAD} % 4) % 4 ))))"
+          echo "$PAYLOAD" | base64 -d | jq '{sub, aud, repository, ref, workflow_ref}'
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
