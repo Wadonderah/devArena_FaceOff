@@ -71,7 +71,7 @@ jobs:
           # The entrypoint waits for the database and runs migrations first, so
           # give it room before deciding the deploy failed.
           for i in $(seq 1 30); do
-            if curl -fsS "https://api.<APEX>/health/live" > /dev/null; then
+            if curl -fsS "https://api.akwannya-hub.org/health/live" > /dev/null; then
               echo "api is live"; exit 0
             fi
             echo "waiting for api ($i)"; sleep 5
