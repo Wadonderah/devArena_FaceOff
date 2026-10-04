@@ -1,7 +1,13 @@
 import { z } from 'zod';
 
-/// ZeptoMail's Authorization header format. The token is sent verbatim.
-const ZEPTOMAIL_TOKEN_PREFIX = 'Zoho-enczapikey ';
+/// Resend API keys are prefixed. Checking it at boot catches a truncated key, or
+/// one pasted from a different service, before it becomes a 401 on first send.
+///
+/// Note the key is stored BARE here and the service adds "Bearer ". The previous
+/// provider put its prefix inside the env var, and pasting the bare key from
+/// their console produced a silent 401 on every send. Keeping the scheme in code
+/// removes that whole class of mistake.
+const RESEND_KEY_PREFIX = 're_';
 
 const booleanish = z.enum(['true', 'false']).transform((v) => v === 'true');
 
@@ -48,10 +54,10 @@ export const envSchema = z
     JUDGE0_URL: z.string().url(),
     JUDGE0_TOKEN: z.string().min(1),
 
-    MAIL_DRIVER: z.enum(['zeptomail', 'console']).default('console'),
-    ZEPTOMAIL_TOKEN: optional(z.string().min(1)),
-    ZEPTOMAIL_FROM_ADDRESS: optional(z.string().email()),
-    ZEPTOMAIL_FROM_NAME: z.string().default('Software Engineering Face-Off'),
+    MAIL_DRIVER: z.enum(['resend', 'console']).default('console'),
+    RESEND_API_KEY: optional(z.string().min(1)),
+    RESEND_FROM_ADDRESS: optional(z.string().email()),
+    RESEND_FROM_NAME: z.string().default('Software Engineering Face-Off'),
   })
   .superRefine((env, ctx) => {
     if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
@@ -62,29 +68,28 @@ export const envSchema = z
       });
     }
 
-    if (env.MAIL_DRIVER === 'zeptomail') {
-      if (!env.ZEPTOMAIL_TOKEN) {
+    if (env.MAIL_DRIVER === 'resend') {
+      if (!env.RESEND_API_KEY) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['ZEPTOMAIL_TOKEN'],
-          message: 'required when MAIL_DRIVER is "zeptomail"',
+          path: ['RESEND_API_KEY'],
+          message: 'required when MAIL_DRIVER is "resend"',
         });
-      } else if (!env.ZEPTOMAIL_TOKEN.startsWith(ZEPTOMAIL_TOKEN_PREFIX)) {
-        // The value becomes the Authorization header verbatim. ZeptoMail
-        // rejects a bare key with a 401, and because a send failure is logged
-        // rather than thrown, that shows up as "the email never arrived" with
-        // a registration that appeared to succeed. Fail at boot instead.
+      } else if (!env.RESEND_API_KEY.startsWith(RESEND_KEY_PREFIX)) {
+        // A send failure is logged rather than thrown, so a bad key shows up as
+        // "the email never arrived" on top of a registration that appeared to
+        // succeed. Fail at boot, where the cause is unmissable, instead.
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['ZEPTOMAIL_TOKEN'],
-          message: `must start with "${ZEPTOMAIL_TOKEN_PREFIX}" — the bare API key is rejected with a 401`,
+          path: ['RESEND_API_KEY'],
+          message: `must start with "${RESEND_KEY_PREFIX}" — store the bare key, the "Bearer " scheme is added by the mail service`,
         });
       }
-      if (!env.ZEPTOMAIL_FROM_ADDRESS) {
+      if (!env.RESEND_FROM_ADDRESS) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ['ZEPTOMAIL_FROM_ADDRESS'],
-          message: 'required when MAIL_DRIVER is "zeptomail"',
+          path: ['RESEND_FROM_ADDRESS'],
+          message: 'required when MAIL_DRIVER is "resend"',
         });
       }
     }
