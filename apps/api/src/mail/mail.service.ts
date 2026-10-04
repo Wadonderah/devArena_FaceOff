@@ -8,7 +8,7 @@ export interface OutboundEmail {
   text: string;
 }
 
-const ZEPTOMAIL_ENDPOINT = 'https://api.zeptomail.com/v1.1/email';
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const SEND_TIMEOUT_MS = 10_000;
 
 @Injectable()
@@ -27,52 +27,56 @@ export class MailService implements OnModuleInit {
     this.logger.log(
       driver === 'console'
         ? 'Mail driver: console — messages are logged, never delivered'
-        : `Mail driver: zeptomail — sending as ${this.config.get('ZEPTOMAIL_FROM_ADDRESS')}`,
+        : `Mail driver: resend — sending as ${this.senderAddress()}`,
     );
   }
 
   async send(email: OutboundEmail): Promise<void> {
     if (this.config.get('MAIL_DRIVER') === 'console') {
-      // `log`, not `debug`: this is the only record that a message existed, and
-      // debug output is the first thing a production log level filters out.
+      
       this.logger.log(`[console mail] to=${email.to} subject="${email.subject}"\n${email.text}`);
       return;
     }
 
-    await this.sendViaZeptoMail(email);
+    await this.sendViaResend(email);
   }
 
+  /// Resend takes the sender as one RFC 5322 string rather than as separate
+  /// fields, so it is assembled here instead of in the request body.
+  private senderAddress(): string {
+    const address = this.config.get('RESEND_FROM_ADDRESS');
+    const name = this.config.get('RESEND_FROM_NAME');
+    return name ? `${name} <${address}>` : `${address}`;
+  }
 
-  private async sendViaZeptoMail(email: OutboundEmail): Promise<void> {
+  private async sendViaResend(email: OutboundEmail): Promise<void> {
     let response: Response;
 
     try {
-      response = await fetch(ZEPTOMAIL_ENDPOINT, {
+      response = await fetch(RESEND_ENDPOINT, {
         method: 'POST',
         headers: {
-          // ZeptoMail expects "Zoho-enczapikey <key>". The env schema enforces
-          // that prefix at boot, so the value is passed through whole.
-          Authorization: this.config.get('ZEPTOMAIL_TOKEN') as string,
+          // The key is stored bare in the environment and the scheme is added
+          // here. Keeping "Bearer " out of the env var means a key pasted
+          // straight from the Resend dashboard is correct as-is.
+          Authorization: `Bearer ${this.config.get('RESEND_API_KEY') as string}`,
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          from: {
-            address: this.config.get('ZEPTOMAIL_FROM_ADDRESS'),
-            name: this.config.get('ZEPTOMAIL_FROM_NAME'),
-          },
-          to: [{ email_address: { address: email.to } }],
+          from: this.senderAddress(),
+          to: [email.to],
           subject: email.subject,
-          htmlbody: email.html,
-          textbody: email.text,
+          html: email.html,
+          text: email.text,
         }),
         signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
       });
     } catch (error) {
-      // DNS failure, connection refused, or the 10s timeout. Previously this
-      // escaped and turned a mail problem into a 500 on registration.
+      // DNS failure, connection refused, or the 10s timeout. This must not
+      // escape: it would turn a mail problem into a 500 on registration.
       this.logger.error(
-        `ZeptoMail unreachable while sending to ${email.to}: ${(error as Error).message}`,
+        `Resend unreachable while sending to ${email.to}: ${(error as Error).message}`,
       );
       return;
     }
@@ -80,25 +84,26 @@ export class MailService implements OnModuleInit {
     const body = await response.text().catch(() => '');
 
     if (!response.ok) {
-      this.logger.error(
-        `ZeptoMail rejected message to ${email.to}: ${response.status} ${body}`,
-      );
+      // Logged with the status and the whole body because the body is where the
+      // actionable part lives: an unverified sending domain, an exhausted quota
+      // and a revoked key are all 4xx and are otherwise indistinguishable.
+      this.logger.error(`Resend rejected message to ${email.to}: ${response.status} ${body}`);
       return;
     }
 
-    // request_id is what ZeptoMail's own support and dashboard search on, so it
-    // is the one field worth pulling out of an accepted response.
-    const requestId = extractRequestId(body);
+    // Resend returns {"id": "..."} on acceptance. That id is what their
+    // dashboard and support search on, so it is the one field worth surfacing.
+    const id = extractMessageId(body);
     this.logger.log(
-      `ZeptoMail accepted message to ${email.to}` + (requestId ? ` (request_id ${requestId})` : ''),
+      `Resend accepted message to ${email.to}` + (id ? ` (id ${id})` : ''),
     );
   }
 }
 
-function extractRequestId(body: string): string | null {
+function extractMessageId(body: string): string | null {
   try {
-    const parsed = JSON.parse(body) as { request_id?: string };
-    return parsed.request_id ?? null;
+    const parsed = JSON.parse(body) as { id?: string };
+    return parsed.id ?? null;
   } catch {
     return null;
   }

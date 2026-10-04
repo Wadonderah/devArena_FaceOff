@@ -8,10 +8,7 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-/// Three roles, strictly ordered. SUPER_ADMIN can do everything an ORGANIZER can
-/// plus platform administration (people, roles, audit, system health); ORGANIZER
-/// runs competitions; PARTICIPANT competes. Precedence is declared once in
-/// ROLE_RANK (auth/guards/roles.guard.ts) rather than re-derived per call site.
+
 enum Role {
   PARTICIPANT
   ORGANIZER
@@ -36,10 +33,7 @@ enum RoundState {
   ARCHIVED
 }
 
-/// When a participant learns whether their MCQ answer was correct.
-/// IMMEDIATE trades some competition integrity for learning value; pair it with
-/// per-participant option shuffling so a revealed answer does not transfer
-/// between participants by option label.
+
 enum RevealMode {
   IMMEDIATE
   ON_ROUND_END
@@ -94,9 +88,6 @@ enum Category {
   PERFORMANCE
 }
 
-/// Curated rather than every language Judge0 offers. Each id in LANGUAGE_IDS
-/// (execution/judge0.status.ts) is verified against the deployed instance —
-/// an unverified id fails only when a participant submits, mid-round.
 enum Language {
   PYTHON
   JAVASCRIPT
