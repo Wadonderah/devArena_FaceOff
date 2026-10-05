@@ -3,29 +3,15 @@
 import Link from 'next/link';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
-import { RoundStateBadge, CompetitionStateBadge, Badge } from '@/components/ui/badge';
+import { RoundStateBadge, CompetitionStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { TeamCard } from '@/components/team-card';
-import { useCompetitions, useCurrentUser, useProfile } from '@/lib/hooks';
+import { VerifyBanner } from '@/components/verify-banner';
+import { useCompetitions, useProfile } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
-import { ArrowRight, CalendarClock, LayoutList, MailWarning, Radio, Trophy } from 'lucide-react';
-
-function VerifyBanner() {
-  const { data: user } = useCurrentUser();
-  if (!user || user.emailVerified) return null;
-
-  return (
-    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3">
-      <MailWarning aria-hidden size={17} strokeWidth={1.5} className="shrink-0 text-warn" />
-      <Badge tone="warn">Action needed</Badge>
-      <p className="text-[14px] text-ink-dim">
-        Verify your email to join competitions and submit answers.
-      </p>
-    </div>
-  );
-}
+import { ArrowRight, CalendarClock, LayoutList, Radio, Trophy } from 'lucide-react';
 
 function CurrentCompetition({ id }: { id: string }) {
   const { data, isLoading } = useCompetition(id);
