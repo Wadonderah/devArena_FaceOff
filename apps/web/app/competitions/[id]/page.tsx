@@ -154,7 +154,7 @@ function TeamPanel({
   });
 
   if (!joined) return null;
-  if (isLoading) return <Skeleton className="mb-6 h-32 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="mb-6 h-32 w-full rounded-xl" />;
 
   // Already in a team: show it, and make the one-team-per-competition rule and
   // the way out of it both visible. Previously this looked like a dead end.

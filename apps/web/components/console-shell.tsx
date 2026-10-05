@@ -92,7 +92,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
 
   return (
     <Shell>
-      <div className="mb-7 overflow-hidden rounded-[14px] border border-line bg-surface-1/70">
+      <div className="mb-7 overflow-hidden rounded-xl border border-line bg-surface-1/70">
         {/* The event's pulse. Amber-idle, live-coloured and moving the moment a
             round opens — visible from across a room without reading a word. */}
         <div

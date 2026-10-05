@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -13,7 +16,12 @@ import { CurrentUser, Roles, type AuthenticatedUser } from '../common/decorators
 import { ROLE_RANK } from '../auth/guards/roles.guard';
 import { VerifiedEmailGuard } from '../auth/guards/verified-email.guard';
 import { RoundsService } from './rounds.service';
-import { CreateRoundDto, SetRoundChallengesDto, UpdateRoundDto } from './dto/round.dto';
+import {
+  CreateRoundDto,
+  SetRoundChallengesDto,
+  SetRoundWeightDto,
+  UpdateRoundDto,
+} from './dto/round.dto';
 
 @Controller()
 export class RoundsController {
@@ -100,9 +108,40 @@ export class RoundsController {
     return this.rounds.transition(id, RoundState.FINALIZED);
   }
 
+  /// Weight is scoring policy, not round content, so it stays editable after a
+  /// round goes live — unlike PATCH /rounds/:id. Rewrites every score already
+  /// recorded for the round so the leaderboard stays consistent.
+  @Patch('rounds/:id/weight')
+  @Roles(Role.ORGANIZER)
+  setWeight(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetRoundWeightDto) {
+    return this.rounds.setWeight(id, dto.weight);
+  }
+
+  /// Steps a finalized round back to COMPLETED so a mistake in a published
+  /// result can be corrected and the round re-finalized.
+  ///
+  /// This reopens SCORING, not submissions: the round does not become LIVE, so
+  /// nobody can add work after seeing the standings. Named `unlock` rather than
+  /// reusing `end`, because "end a round that already ended" would read as a
+  /// no-op at the call site and hide what is actually happening.
+  @Post('rounds/:id/unlock')
+  @Roles(Role.ORGANIZER)
+  unlock(@Param('id', ParseUUIDPipe) id: string) {
+    return this.rounds.transition(id, RoundState.COMPLETED);
+  }
+
   @Post('rounds/:id/archive')
   @Roles(Role.ORGANIZER)
   archive(@Param('id', ParseUUIDPipe) id: string) {
     return this.rounds.transition(id, RoundState.ARCHIVED);
+  }
+
+  /// Draft and scheduled rounds only. The service rejects anything that has
+  /// opened, because it may own submissions and score events.
+  @Delete('rounds/:id')
+  @Roles(Role.ORGANIZER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.rounds.remove(id);
   }
 }

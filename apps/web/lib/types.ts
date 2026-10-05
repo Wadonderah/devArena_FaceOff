@@ -92,6 +92,10 @@ export interface CompetitionListItem {
   name: string;
   description: string | null;
   state: CompetitionState;
+  // Returned by the API's participant list but previously absent here, so the
+  // dashboard had no way to tell anyone when registration actually closes.
+  registrationOpensAt: string | null;
+  registrationClosesAt: string | null;
   _count?: { participants: number };
 }
 

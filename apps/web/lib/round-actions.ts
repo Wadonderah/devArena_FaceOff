@@ -35,7 +35,14 @@ export const ROUND_ACTIONS: Partial<Record<RoundState, RoundAction[]>> = {
     { path: 'finalize', label: 'Finalize scores', variant: 'primary' },
     { path: 'archive', label: 'Archive', variant: 'secondary' },
   ],
-  FINALIZED: [{ path: 'archive', label: 'Archive', variant: 'secondary' }],
+  // Unlock steps back to COMPLETED so a mistake in a published result can be
+  // corrected and the round re-finalized. It does NOT reopen submissions — the
+  // round never returns to LIVE — so the destructive-looking label is about the
+  // standings being provisional again, not about participants getting more time.
+  FINALIZED: [
+    { path: 'unlock', label: 'Unlock scores', variant: 'secondary' },
+    { path: 'archive', label: 'Archive', variant: 'secondary' },
+  ],
 };
 
 /// What each transition should say once it succeeds.
@@ -50,5 +57,6 @@ export const TRANSITION_TOAST: Record<string, string> = {
   resume: 'Round resumed',
   end: 'Round ended',
   finalize: 'Scores finalized and locked',
+  unlock: 'Scores unlocked — correct them, then finalize again',
   archive: 'Round archived',
 };

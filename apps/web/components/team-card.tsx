@@ -25,7 +25,7 @@ export function TeamCard({ competitionId }: { competitionId: string }) {
     refetchInterval: 15_000,
   });
 
-  if (isLoading) return <Skeleton className="h-32 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-32 w-full rounded-xl" />;
   if (!team) return null;
 
   const standing = board?.rows.find((row) => row.teamId === team.id);

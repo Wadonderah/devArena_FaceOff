@@ -47,7 +47,7 @@ export default function RegisterPage() {
           </p>
           <Link
             href="/login"
-            className="mt-6 inline-flex h-10 items-center rounded-[10px] border border-line bg-surface-3 px-4 text-sm"
+            className="mt-6 inline-flex h-10 items-center rounded-lg border border-line bg-surface-3 px-4 text-sm"
           >
             Back to sign in
           </Link>

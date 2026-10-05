@@ -177,7 +177,7 @@ function DebuggingWorkspace({
       ),
   });
 
-  if (isLoading) return <Skeleton className="h-96 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (!bug) return null;
 
   const busy = run.isPending || submit.isPending;
@@ -263,7 +263,7 @@ function DebuggingWorkspace({
                 aria-pressed={language === lang}
                 onClick={() => setLanguage(lang)}
                 className={cn(
-                  'rounded-[7px] px-3 py-1.5 text-[13px] transition-colors duration-150',
+                  'rounded-md px-3 py-1.5 text-[13px] transition-colors duration-150',
                   language === lang ? 'bg-surface-3 text-ink' : 'text-ink-dim hover:text-ink',
                 )}
               >

@@ -46,10 +46,65 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', monospace;
 
-  /* Rounder than before. All four references sit noticeably softer than 14px,
-     and radius is one of the cheapest polish levers there is. */
-  --radius-card: 18px;
-  --radius-panel: 24px;
+  /*
+    Fluid type scale.
+
+    These redefine what `text-lg` … `text-3xl` MEAN, rather than asking ~47 call
+    sites across 18 files to each remember a responsive variant. Tailwind's
+    defaults are fixed pixel sizes, so a heading set for a 1440px layout arrived
+    at the same size on a 390px phone and swamped it.
+
+    Desktop is deliberately unchanged — the max of every clamp is Tailwind's
+    original value — so this only ever shrinks small viewports:
+
+      token      390px        1440px
+      text-lg    16 (was 18)  18
+      text-xl    17 (was 20)  20
+      text-2xl   20 (was 24)  24
+      text-3xl   24 (was 30)  30
+
+    The landing page sets its own explicit clamps and is unaffected.
+  */
+  --text-lg: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-xl: clamp(1.0625rem, 0.98rem + 0.4vw, 1.25rem);
+  --text-2xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+  --text-3xl: clamp(1.5rem, 1.25rem + 1.1vw, 1.875rem);
+
+  /*
+    Radius scale, deliberately tight.
+
+    This replaced eight different radii spread from 6px to 24px, which was not a
+    system but an accumulation — and the large end of it was the single thing
+    making the app read as generated. Big uniform corners on every surface are a
+    template signature; restraint and hierarchy are not.
+
+    Tailwind's own steps are redefined rather than avoided, so the ~110 existing
+    `rounded-*` classes all tighten at once instead of each file being edited and
+    one inevitably being missed.
+
+      token         was    now
+      rounded-sm     2px    3px
+      rounded-md     6px    4px
+      rounded-lg     8px    6px
+      rounded-xl    12px    8px
+      rounded-2xl   16px   10px
+      rounded-3xl   24px   12px
+
+    `rounded-full` stays, but only where a shape is genuinely a circle or a pill:
+    status dots, spinners, avatars, progress tracks and badges. Not buttons.
+  */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
+
+  /* Controls sit tighter than the surfaces that contain them, which is what
+     produces hierarchy rather than a uniform softness everywhere. */
+  --radius-control: 5px;
+  --radius-card: 8px;
+  --radius-panel: 10px;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -248,14 +303,17 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Flat, not a gradient.
+
+     The previous two-stop vertical gradient was doing the same job as the
+     border and the surface step already do, and a gradient-filled card is one
+     of the more recognisable generated-UI signatures. A single surface with a
+     hairline border reads as more deliberate and lets nesting (surface-1 inside
+     surface-0, surface-2 inside that) carry the depth instead. */
   .panel {
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-surface-2) 92%, transparent),
-      var(--color-surface-1)
-    );
+    background: var(--color-surface-1);
     border: 1px solid var(--color-line);
-    border-radius: var(--radius-card);
+    border-radius: var(--radius-panel);
   }
 
   .hairline {
@@ -463,6 +521,12 @@
 /* Large containers: one step softer than a card. */
 .rounded-panel {
   border-radius: var(--radius-panel);
+}
+
+/* Interactive controls, tighter than the surfaces holding them. Written out
+   rather than relied on as a generated utility, matching .rounded-panel above. */
+.rounded-control {
+  border-radius: var(--radius-control);
 }
 
 /*
