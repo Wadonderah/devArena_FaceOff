@@ -435,7 +435,7 @@ function QuestionList({ roundId, answeredIds }: { roundId: string; answeredIds: 
     retry: false,
   });
 
-  if (isLoading) return <Skeleton className="h-64 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
   if (!data) return null;
 
   return (
@@ -474,7 +474,7 @@ function LoadedQuestion({
     retry: false,
   });
 
-  if (isLoading) return <Skeleton className="h-64 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
   if (!data) return null;
 
   return (

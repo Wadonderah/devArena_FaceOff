@@ -113,9 +113,36 @@ export class RoundsService {
             data: {
                 state: to,
                 startsAt: to === RoundState.LIVE && !round.startsAt ? now : undefined,
-                endsAt: to === RoundState.COMPLETED ? now : undefined,
+                // `&& !round.endsAt` matters for the FINALIZED -> COMPLETED
+                // unlock: without it, unlocking a round to correct its scores
+                // would stamp a fresh end time over the moment it actually
+                // ended, and the recorded timeline would be a lie.
+                endsAt: to === RoundState.COMPLETED && !round.endsAt ? now : undefined,
             },
         })
+    }
+
+    /// Permanently remove a round, and only before it has ever opened.
+    ///
+    /// DRAFT and SCHEDULED are the two states that cannot have accepted a
+    /// submission, so deleting one destroys nothing a participant produced.
+    /// From LIVE onward the round may own submissions, MCQ attempts and score
+    /// events — all of which cascade — so archiving is the only way to retire
+    /// it. Enforced here rather than in the UI: a hidden button is not a check.
+    async remove(roundId: string) {
+        const round = await this.prisma.round.findUnique({
+            where: { id: roundId },
+            select: { id: true, state: true },
+        })
+        if (!round) throw new NotFoundException('Round not found')
+
+        if (round.state !== RoundState.DRAFT && round.state !== RoundState.SCHEDULED) {
+            throw new ConflictException(
+                `A round in ${round.state} cannot be deleted. Archive it instead to keep its results.`
+            )
+        }
+
+        await this.prisma.round.delete({ where: { id: roundId } })
     }
 
     async setChallenges(roundId: string, dto: SetRoundChallengesDto) {

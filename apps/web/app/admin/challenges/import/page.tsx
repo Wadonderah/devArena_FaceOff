@@ -82,7 +82,7 @@ function DraftCard({
   return (
     <li
       className={cn(
-        'rounded-[14px] border bg-surface-1 p-5',
+        'rounded-xl border bg-surface-1 p-5',
         incomplete ? 'border-warn/45' : 'border-line',
       )}
     >
@@ -152,7 +152,7 @@ function DraftCard({
                   options[i] = { label: letter, text: e.target.value };
                   onChange({ ...draft, options });
                 }}
-                className="h-10 flex-1 rounded-[10px] border border-line bg-surface-0 px-3 text-[14px] text-ink focus:border-brand focus:outline-none"
+                className="h-10 flex-1 rounded-lg border border-line bg-surface-0 px-3 text-[14px] text-ink focus:border-brand focus:outline-none"
               />
             </div>
           );

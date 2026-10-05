@@ -103,7 +103,7 @@ function CompetitionAdmin({ competition }: { competition: CompetitionListItem })
     queryFn: () => api<{ rounds: RoundSummary[] }>(`/competitions/${competition.id}`),
   });
 
-  if (isLoading) return <Skeleton className="h-40 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-40 w-full rounded-xl" />;
 
   return (
     <section className="panel hairline overflow-hidden">
@@ -301,7 +301,7 @@ function AdminContent() {
             <Stat label="Submissions" value={overview.submissions} />
           </>
         ) : (
-          Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-[76px] rounded-[14px]" />)
+          Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-[76px] rounded-xl" />)
         )}
       </div>
 

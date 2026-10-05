@@ -73,7 +73,7 @@ export function ThemeToggle({ className }: { className?: string }) {
             aria-pressed={active}
             title={`${option.label} theme`}
             className={cn(
-              'grid size-7 place-items-center rounded-[6px] text-[13px] transition-colors duration-150',
+              'grid size-7 place-items-center rounded-md text-[13px] transition-colors duration-150',
               active
                 ? 'bg-surface-3 text-ink'
                 : 'text-ink-faint hover:text-ink-dim',

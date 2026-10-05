@@ -154,7 +154,7 @@ function Board({ competitionId }: { competitionId: string }) {
                 aria-pressed={view === mode}
                 onClick={() => setView(mode)}
                 className={cn(
-                  'rounded-[7px] px-3 py-1.5 text-[13px] capitalize transition-colors duration-150',
+                  'rounded-md px-3 py-1.5 text-[13px] capitalize transition-colors duration-150',
                   view === mode ? 'bg-surface-3 text-ink' : 'text-ink-dim hover:text-ink',
                 )}
               >

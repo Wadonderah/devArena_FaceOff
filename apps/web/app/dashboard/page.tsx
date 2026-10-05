@@ -19,7 +19,7 @@ import type { CompetitionListItem } from '@/lib/types';
 function CurrentCompetition({ id }: { id: string }) {
   const { data, isLoading } = useCompetition(id);
 
-  if (isLoading) return <Skeleton className="h-48 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-48 w-full rounded-xl" />;
   if (!data) return null;
 
   const live = data.rounds.find((r) => r.state === 'LIVE');

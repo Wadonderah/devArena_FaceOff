@@ -14,8 +14,14 @@ const ALLOWED: Record<RoundState, RoundState[]> = {
 
   // FINALIZED locks the scores. Archiving straight from COMPLETED stays possible
   // for rounds nobody needs to certify.
+  //
+  // FINALIZED may step back to COMPLETED so a mistake in a published result can
+  // be corrected and the round re-finalized. That is deliberately NOT a route
+  // back to LIVE: unlocking reopens *scoring*, never submissions, so nobody can
+  // add work after seeing the standings. The step is recorded by the audit
+  // interceptor like any other staff mutation.
   [RoundState.COMPLETED]: [RoundState.FINALIZED, RoundState.ARCHIVED],
-  [RoundState.FINALIZED]: [RoundState.ARCHIVED],
+  [RoundState.FINALIZED]: [RoundState.COMPLETED, RoundState.ARCHIVED],
   [RoundState.ARCHIVED]: [],
 };
 

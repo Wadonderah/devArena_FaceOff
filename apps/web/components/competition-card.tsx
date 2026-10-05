@@ -26,7 +26,7 @@ export function CompetitionCard({ competition }: { competition: CompetitionListI
   return (
     <Link
       href={`/competitions/${id}`}
-      className="group block rounded-[14px] border border-line bg-surface-1 p-5 transition-colors hover:border-brand/40 hover:bg-surface-2/60"
+      className="group block rounded-xl border border-line bg-surface-1 p-5 transition-colors hover:border-brand/40 hover:bg-surface-2/60"
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <h3 className="text-lg leading-snug">{name}</h3>

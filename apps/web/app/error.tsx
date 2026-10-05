@@ -45,13 +45,13 @@ export default function RouteError({
           <button
             type="button"
             onClick={reset}
-            className="glow-brand inline-flex h-10 items-center rounded-[10px] bg-brand px-4 text-sm font-medium text-white"
+            className="glow-brand inline-flex h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-white"
           >
             Try again
           </button>
           <Link
             href="/dashboard"
-            className="inline-flex h-10 items-center rounded-[10px] border border-line px-4 text-sm"
+            className="inline-flex h-10 items-center rounded-lg border border-line px-4 text-sm"
           >
             Back to dashboard
           </Link>

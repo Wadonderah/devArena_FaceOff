@@ -168,7 +168,7 @@ function McqForm({ onDone }: { onDone: () => void }) {
               required
               value={text}
               onChange={(e) => setTexts(texts.map((t, j) => (j === i ? e.target.value : t)))}
-              className="h-10 flex-1 rounded-[10px] border border-line bg-surface-1 px-3 text-[14px] text-ink focus:border-brand focus:outline-none"
+              className="h-10 flex-1 rounded-lg border border-line bg-surface-1 px-3 text-[14px] text-ink focus:border-brand focus:outline-none"
             />
           </div>
         ))}
@@ -566,7 +566,7 @@ function DebuggingForm({ onDone }: { onDone: () => void }) {
                 placeholder="filename.py"
                 aria-label={`Context file ${i + 1} name`}
                 onChange={(e) => setFile(i, { name: e.target.value })}
-                className="h-9 flex-1 rounded-[10px] border border-line bg-surface-0 px-3 font-mono text-[13px] text-ink focus:border-brand focus:outline-none"
+                className="h-9 flex-1 rounded-lg border border-line bg-surface-0 px-3 font-mono text-[13px] text-ink focus:border-brand focus:outline-none"
               />
               <Button
                 type="button"

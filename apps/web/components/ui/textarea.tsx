@@ -28,7 +28,7 @@ export const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(
-            'w-full min-h-24 px-3.5 py-2.5 rounded-[10px] bg-surface-1 text-ink',
+            'w-full min-h-24 px-3.5 py-2.5 rounded-lg bg-surface-1 text-ink',
             'placeholder:text-ink-faint border transition-colors duration-150 resize-y',
             mono && 'font-mono text-[13px]',
             error ? 'border-danger/70' : 'border-line hover:border-line-bright',

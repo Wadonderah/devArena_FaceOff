@@ -11,7 +11,7 @@ import { Field } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select';
 import { TextAreaField } from '@/components/ui/textarea';
 import { SkeletonRows } from '@/components/ui/skeleton';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, describeError } from '@/lib/api';
 import type { ChallengeType, Competition, RoundSummary, RoundType } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { ALL_LANGUAGES, LANGUAGE_LABELS } from '@/lib/taxonomy';
@@ -22,6 +22,7 @@ import {
   type RoundScoringValues,
 } from '@/components/round-scoring-fields';
 import { useToast } from '@/components/ui/toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CompetitionSettings } from '@/components/competition-settings';
 
 interface ChallengeRow {
@@ -558,6 +559,11 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
   // Tracked so only the pressed button spins — a shared `isPending` lights up
   // every action in the row.
   const [pending, setPending] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // DRAFT and SCHEDULED are both the states a round can still be edited in and
+  // the only ones it can be deleted in — neither has accepted a submission.
+  // The server enforces the same rule; this only avoids offering a 409.
   const editable = round.state === 'DRAFT' || round.state === 'SCHEDULED';
 
   const transition = useMutation({
@@ -572,6 +578,19 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
         error instanceof ApiError ? error.displayMessage : undefined,
       ),
     onSettled: () => setPending(null),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api<void>(`/rounds/${round.id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Round deleted', round.name);
+      onChanged();
+    },
+    onError: (error) => {
+      const { title, detail } = describeError(error, 'Could not delete the round');
+      toast.error(title, detail);
+      setConfirmingDelete(false);
+    },
   });
 
   return (
@@ -623,6 +642,17 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
               >
                 {picking ? 'Close' : 'Challenges'}
               </Button>
+
+              {/* The shared dialog rather than a bespoke two-step, so every
+                  destructive action in the app asks the same way. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={remove.isPending}
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete
+              </Button>
             </>
           )}
           {actions.map((action) => (
@@ -642,6 +672,16 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete "${round.name}"?`}
+        description="This round has not opened, so nothing anyone submitted is lost. It cannot be undone, and its challenges will need attaching again if you recreate it."
+        confirmLabel="Delete round"
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+        onCancel={() => setConfirmingDelete(false)}
+      />
 
       {editing && (
         <EditRoundForm

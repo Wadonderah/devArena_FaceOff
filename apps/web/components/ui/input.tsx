@@ -29,7 +29,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cn(
-          'w-full h-11 px-3.5 rounded-[10px] bg-surface-1 text-ink placeholder:text-ink-faint',
+          'w-full h-11 px-3.5 rounded-lg bg-surface-1 text-ink placeholder:text-ink-faint',
           'border transition-colors duration-150',
           error ? 'border-danger/70' : 'border-line hover:border-line-bright',
           'focus:border-brand focus:outline-none focus-visible:outline-2 focus-visible:outline-brand-bright',

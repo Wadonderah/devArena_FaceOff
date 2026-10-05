@@ -50,11 +50,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
           the shape every reference uses, and it lets the background show
           through on both sides instead of slicing the page in two. */}
       <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 rounded-full border border-line bg-surface-0/80 px-4 backdrop-blur-xl sm:px-5">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 rounded-panel border border-line bg-surface-0/80 px-4 backdrop-blur-xl sm:px-5">
           <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0">
             <span
               aria-hidden
-              className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-deep text-[13px] font-bold text-white"
+              className="grid size-7 place-items-center rounded-md bg-brand text-[13px] font-bold text-white"
             >
               F
             </span>
@@ -72,7 +72,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   href={link.href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors duration-150 whitespace-nowrap',
+                    'inline-flex items-center gap-1.5 rounded-control px-3 py-1.5 text-sm transition-colors duration-150 whitespace-nowrap',
                     active
                       ? 'bg-surface-2 text-ink'
                       : 'text-ink-dim hover:bg-surface-2/60 hover:text-ink',

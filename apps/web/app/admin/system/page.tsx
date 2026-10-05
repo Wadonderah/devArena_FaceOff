@@ -65,7 +65,7 @@ function HealthPanel() {
     refetchInterval: 15_000,
   });
 
-  if (isLoading) return <Skeleton className="h-24 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-24 w-full rounded-xl" />;
 
   const entries = Object.entries(data ?? {});
 
