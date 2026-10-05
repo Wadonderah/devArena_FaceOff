@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/cn';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { Monogram } from '@/components/brand-mark';
 import { useCompetitions, useCurrentUser, useLogout } from '@/lib/hooks';
 import type { Team } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -51,16 +52,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
           through on both sides instead of slicing the page in two. */}
       <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 rounded-panel border border-line bg-surface-0/80 px-4 backdrop-blur-xl sm:px-5">
-          <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0">
-            <span
-              aria-hidden
-              className="grid size-7 place-items-center rounded-md bg-brand text-[13px] font-bold text-white"
-            >
-              F
-            </span>
-            <span className="font-display text-[15px] font-semibold tracking-tight">
-              Face-Off
-            </span>
+          {/* The monogram, not the full logo. The logo is a detailed circular
+              illustration that needs room: at nav scale it is a colour blob,
+              and sized to be legible it fills half the bar and reads as an
+              avatar. The monogram keeps the one idea that survives small — the
+              teal/orange split — and the wordmark is set in the nav's own type,
+              so the lockup sits on the same line as the links rather than
+              floating above it. */}
+          <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5">
+            <Monogram size={24} />
+            <span className="text-sm font-semibold tracking-tight">Face-Off</span>
           </Link>
 
           <nav aria-label="Main" className="flex items-center gap-1 overflow-x-auto">

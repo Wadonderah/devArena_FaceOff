@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { BrandMark } from '@/components/brand-mark';
 
 // Illustrative weights — organizers set their own per competition.
 const ROUNDS = [
@@ -93,7 +94,11 @@ export default function LandingPage() {
 
         <div aria-hidden className="hero-scrim pointer-events-none absolute inset-0 z-0" />
 
-        <div className="relative z-10 mx-auto flex max-w-6xl justify-end px-5 pt-5">
+        {/* The landing header carried no brand at all — just the theme toggle
+            floating alone. The lockup now anchors the left so the bar reads as a
+            header rather than a stray control. */}
+        <div className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-5 pt-5">
+          <BrandMark size={30} priority />
           <ThemeToggle />
         </div>
 

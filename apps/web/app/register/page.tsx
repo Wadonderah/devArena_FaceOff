@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/input';
 import { AuthBackdrop } from '@/components/auth-backdrop';
+import { BrandMark } from '@/components/brand-mark';
 import { MailCheck } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -61,10 +62,20 @@ export default function RegisterPage() {
       <AuthBackdrop />
 
       <div className="relative z-10 mx-auto flex w-full max-w-md flex-col">
-      <h1 className="text-3xl">Create your account</h1>
-      <p className="mt-2 text-[15px] text-ink-dim">
-        Verify your email, join the competition, and you&apos;re in.
-      </p>
+      {/* Register had no brand mark at all, so arriving here from the landing
+          page dropped every visual cue that you were still in the same product.
+          Laid out exactly as login's header, so the two pages do not subtly
+          disagree when someone switches between them. */}
+      <div className="mb-8 flex flex-col items-center text-center">
+        <Link href="/" aria-label="Face-Off home">
+          <BrandMark size={48} showWordmark={false} priority />
+        </Link>
+
+        <h1 className="mt-5 text-3xl">Create your account</h1>
+        <p className="mt-2 text-[15px] text-ink-dim">
+          Verify your email, join the competition, and you&apos;re in.
+        </p>
+      </div>
 
             {/*
         method="post" matters even though onSubmit handles the request. A form

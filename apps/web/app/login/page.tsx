@@ -7,6 +7,7 @@ import { api, ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/input'
 import { AuthBackdrop } from '@/components/auth-backdrop'
+import { BrandMark } from '@/components/brand-mark'
 
 export default function LoginPage() {
     const router = useRouter()
@@ -37,20 +38,21 @@ export default function LoginPage() {
             <AuthBackdrop />
 
             <div className="relative z-10 mx-auto flex w-full max-w-md flex-col">
-                <Link href="/" className="mb-8 inline-flex items-center gap-2.5 self-start">
-                    <span
-                        aria-hidden
-                        className="grid size-7 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-deep text-[13px] font-bold text-white"
-                    >
-                        F
-                    </span>
-                    <span className="font-display text-[15px] font-semibold">Face-Off</span>
-                </Link>
+                {/* The header block centres as a unit. A centred mark above a
+                    left-aligned heading has nothing to line up with and reads
+                    as a mistake; the form fields below stay left-aligned,
+                    because labels must. 48px rather than 34px so the mark has
+                    presence instead of floating. */}
+                <div className="mb-8 flex flex-col items-center text-center">
+                    <Link href="/" aria-label="Face-Off home">
+                        <BrandMark size={48} showWordmark={false} priority />
+                    </Link>
 
-                <h1 className="text-3xl">Sign in</h1>
-                <p className="mt-2 text-[15px] text-ink-dim">
-                    Welcome back. Let&apos;s get you competing.
-                </p>
+                    <h1 className="mt-5 text-3xl">Sign in</h1>
+                    <p className="mt-2 text-[15px] text-ink-dim">
+                        Welcome back. Let&apos;s get you competing.
+                    </p>
+                </div>
 
                 {/*
         method="post" matters even though onSubmit handles the request. A form
