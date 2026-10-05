@@ -8,10 +8,13 @@ import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { TeamCard } from '@/components/team-card';
 import { VerifyBanner } from '@/components/verify-banner';
+import { CompetitionCard, CompetitionRow } from '@/components/competition-card';
 import { useCompetitions, useProfile } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
 import { ArrowRight, CalendarClock, LayoutList, Radio, Trophy } from 'lucide-react';
+import type { ReactNode } from 'react';
+import type { CompetitionListItem } from '@/lib/types';
 
 function CurrentCompetition({ id }: { id: string }) {
   const { data, isLoading } = useCompetition(id);
