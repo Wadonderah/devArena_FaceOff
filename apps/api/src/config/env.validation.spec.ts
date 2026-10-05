@@ -49,6 +49,35 @@ describe('validateEnv', () => {
     expect(env.COOKIE_DOMAIN).toBeUndefined();
   });
 
+  describe('ZeptoMail token format', () => {
+    // The token is sent verbatim as the Authorization header. A bare key is a
+    // 401 on every send, and because send failures are logged rather than
+    // thrown, that surfaces as "the email never arrived" with a registration
+    // that looked successful. Boot-time is the only place to catch it cheaply.
+    const zepto = {
+      ...base,
+      MAIL_DRIVER: 'zeptomail',
+      ZEPTOMAIL_FROM_ADDRESS: 'noreply@akwannya-hub.org',
+    };
+
+    it('accepts a token carrying the required prefix', () => {
+      const env = validateEnv({ ...zepto, ZEPTOMAIL_TOKEN: 'Zoho-enczapikey abc123' });
+      expect(env.ZEPTOMAIL_TOKEN).toBe('Zoho-enczapikey abc123');
+    });
+
+    it('refuses a bare API key', () => {
+      expect(() => validateEnv({ ...zepto, ZEPTOMAIL_TOKEN: 'abc123' })).toThrow(
+        /Zoho-enczapikey/,
+      );
+    });
+
+    it('does not police the token when the console driver is in use', () => {
+      expect(() =>
+        validateEnv({ ...base, MAIL_DRIVER: 'console', ZEPTOMAIL_TOKEN: 'abc123' }),
+      ).not.toThrow();
+    });
+  });
+
   it('requires ZeptoMail credentials when the zeptomail driver is selected', () => {
     expect(() => validateEnv({ ...base, MAIL_DRIVER: 'zeptomail' })).toThrow(
       /ZEPTOMAIL_TOKEN/,

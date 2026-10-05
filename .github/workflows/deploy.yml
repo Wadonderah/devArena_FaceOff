@@ -1,0 +1,94 @@
+name: Deploy API
+on:
+  push:
+    branches: [main]
+    # Only rebuild when something that ships in the image changed.
+    paths: ['apps/api/**', 'pnpm-lock.yaml', 'package.json', '.github/workflows/deploy.yml']
+  workflow_dispatch:
+
+permissions:
+  id-token: write           # required for OIDC
+  contents: read
+
+concurrency:                # never let two deploys race
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - uses: actions/checkout@v4
+
+  
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build and push
+        env:
+          REG: ${{ steps.ecr.outputs.registry }}
+          SHA: ${{ github.sha }}
+        run: |
+          # Tagged with the commit SHA as well as latest, so a rollback is
+          # "deploy that tag" rather than "rebuild an old commit and hope".
+          docker build -f apps/api/Dockerfile -t "$REG/faceoff-api:$SHA" -t "$REG/faceoff-api:latest" .
+          docker push "$REG/faceoff-api:$SHA"
+          docker push "$REG/faceoff-api:latest"
+
+      - name: Tell the instance to pull and restart
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "${{ vars.INSTANCE_ID }}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "deploy $SHA" \
+            --parameters 'commands=[
+              "set -e",
+              "cd /opt/faceoff",
+              "aws ecr get-login-password --region ${{ vars.AWS_REGION }} | docker login --username AWS --password-stdin ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com",
+              "docker compose pull api",
+              "docker compose up -d api",
+              "docker image prune -f"
+            ]' \
+            --query "Command.CommandId" --output text)
+
+          echo "SSM command $CMD_ID"
+          aws ssm wait command-executed \
+            --command-id "$CMD_ID" --instance-id "${{ vars.INSTANCE_ID }}" || true
+
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "${{ vars.INSTANCE_ID }}" \
+            --query "{Status:Status,Code:ResponseCode,Out:StandardOutputContent,Err:StandardErrorContent}" --output json
+
+          # Without this the step passes whatever happened on the box: the wait is
+          # followed by `|| true`, and get-command-invocation exits 0 while merely
+          # *reporting* a failure. A deploy that never ran would go green, and the
+          # health check below would confirm it by talking to the OLD container.
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id "${{ vars.INSTANCE_ID }}" \
+            --query Status --output text)
+          if [ "$STATUS" != "Success" ]; then
+            echo "::error::SSM command finished as $STATUS. ResponseCode -1 with no output means"
+            echo "::error::the agent never ran it; check: aws ssm describe-instance-information"
+            exit 1
+          fi
+
+      - name: Confirm it came back up
+        run: |
+          # The entrypoint waits for the database and runs migrations first, so
+          # give it room before deciding the deploy failed.
+          for i in $(seq 1 30); do
+            if curl -fsS "https://api.akwannya-hub.org/health/live" > /dev/null; then
+              echo "api is live"; exit 0
+            fi
+            echo "waiting for api ($i)"; sleep 5
+          done
+          echo "api did not come back within 150s"; exit 1

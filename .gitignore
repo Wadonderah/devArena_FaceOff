@@ -22,6 +22,7 @@ playwright-report/
 # internal docs
 docs
 ui_inspo/
+tools/
 
 
 
@@ -31,3 +32,6 @@ ui_inspo/
 
 # Reference images for the landing redesign, not product assets
 apps/web/ui_inspo/
+
+# Generated from ONBOARDING.md, regenerate rather than commit
+ONBOARDING.pdf

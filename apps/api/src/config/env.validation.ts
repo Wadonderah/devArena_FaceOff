@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/// ZeptoMail's Authorization header format. The token is sent verbatim.
+const ZEPTOMAIL_TOKEN_PREFIX = 'Zoho-enczapikey ';
+
 const booleanish = z.enum(['true', 'false']).transform((v) => v === 'true');
 
 // An env var present but blank (a placeholder line in .env) means "not set".
@@ -65,6 +68,16 @@ export const envSchema = z
           code: z.ZodIssueCode.custom,
           path: ['ZEPTOMAIL_TOKEN'],
           message: 'required when MAIL_DRIVER is "zeptomail"',
+        });
+      } else if (!env.ZEPTOMAIL_TOKEN.startsWith(ZEPTOMAIL_TOKEN_PREFIX)) {
+        // The value becomes the Authorization header verbatim. ZeptoMail
+        // rejects a bare key with a 401, and because a send failure is logged
+        // rather than thrown, that shows up as "the email never arrived" with
+        // a registration that appeared to succeed. Fail at boot instead.
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ZEPTOMAIL_TOKEN'],
+          message: `must start with "${ZEPTOMAIL_TOKEN_PREFIX}" — the bare API key is rejected with a 401`,
         });
       }
       if (!env.ZEPTOMAIL_FROM_ADDRESS) {
