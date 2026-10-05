@@ -108,6 +108,46 @@ export function useLogout() {
   });
 }
 
+/// Send the signed-in user another verification link.
+///
+/// The endpoint takes no body — it reads the account from the session — and is
+/// throttled to 3 per hour per user, so the caller must be ready to surface a
+/// 429 as something more useful than "failed".
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () =>
+      api<{ message: string }>('/auth/resend-verification', { method: 'POST' }),
+  });
+}
+
+/// Re-check verification status when the tab regains focus.
+///
+/// Verification happens in a *different* tab: the link in the email opens one.
+/// The global query policy sets `refetchOnWindowFocus: false` deliberately, so
+/// without this the banner would still be sitting there when the user came
+/// back, telling them to do the thing they just did. Scoped to the banner so
+/// the global policy stays as it is.
+export function useRecheckOnFocus(enabled: boolean): void {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    const recheck = () => {
+      if (document.visibilityState === 'visible') {
+        void queryClient.invalidateQueries({ queryKey: ['me'] });
+      }
+    };
+
+    document.addEventListener('visibilitychange', recheck);
+    window.addEventListener('focus', recheck);
+    return () => {
+      document.removeEventListener('visibilitychange', recheck);
+      window.removeEventListener('focus', recheck);
+    };
+  }, [enabled, queryClient]);
+}
+
 /// Countdown to a round's end. Returns null when there is no deadline.
 export function useCountdown(target: string | null): {
   remainingMs: number | null;
