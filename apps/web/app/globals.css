@@ -46,6 +46,30 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', monospace;
 
+  /*
+    Fluid type scale.
+
+    These redefine what `text-lg` … `text-3xl` MEAN, rather than asking ~47 call
+    sites across 18 files to each remember a responsive variant. Tailwind's
+    defaults are fixed pixel sizes, so a heading set for a 1440px layout arrived
+    at the same size on a 390px phone and swamped it.
+
+    Desktop is deliberately unchanged — the max of every clamp is Tailwind's
+    original value — so this only ever shrinks small viewports:
+
+      token      390px        1440px
+      text-lg    16 (was 18)  18
+      text-xl    17 (was 20)  20
+      text-2xl   20 (was 24)  24
+      text-3xl   24 (was 30)  30
+
+    The landing page sets its own explicit clamps and is unaffected.
+  */
+  --text-lg: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-xl: clamp(1.0625rem, 0.98rem + 0.4vw, 1.25rem);
+  --text-2xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+  --text-3xl: clamp(1.5rem, 1.25rem + 1.1vw, 1.875rem);
+
   /* Rounder than before. All four references sit noticeably softer than 14px,
      and radius is one of the cheapest polish levers there is. */
   --radius-card: 18px;

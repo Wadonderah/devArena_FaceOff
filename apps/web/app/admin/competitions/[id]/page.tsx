@@ -22,6 +22,7 @@ import {
   type RoundScoringValues,
 } from '@/components/round-scoring-fields';
 import { useToast } from '@/components/ui/toast';
+import { CompetitionSettings } from '@/components/competition-settings';
 
 interface ChallengeRow {
   id: string;
@@ -736,6 +737,10 @@ function ManageCompetition({ id }: { id: string }) {
           {setState.error instanceof ApiError ? setState.error.displayMessage : 'Could not update.'}
         </p>
       )}
+
+      <div className="mb-5">
+        <CompetitionSettings competition={data} />
+      </div>
 
       <section className="panel hairline overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">

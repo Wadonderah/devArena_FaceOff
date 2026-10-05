@@ -26,6 +26,33 @@ export class ApiError extends Error {
   }
 }
 
+/// Turn a thrown error into something worth showing a participant.
+///
+/// The rate limiter is the reason this exists. Nest's ThrottlerException carries
+/// the message "ThrottlerException: Too Many Requests", which reached the UI
+/// verbatim and read as a crash rather than as "wait a moment". The API's
+/// exception filter already tags these `RATE_LIMITED`, so the code is a reliable
+/// signal and the provider's wording never has to be trusted.
+export function describeError(
+  error: unknown,
+  fallbackTitle = 'Something went wrong',
+): { title: string; detail: string; rateLimited: boolean } {
+  if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
+    return {
+      title: 'Going a bit fast',
+      detail: 'Give it a few seconds, then try again.',
+      rateLimited: true,
+    };
+  }
+
+  return {
+    title: fallbackTitle,
+    detail:
+      error instanceof ApiError ? error.displayMessage : 'Check your connection and try again.',
+    rateLimited: false,
+  };
+}
+
 let refreshInFlight: Promise<boolean> | null = null;
 
 /// A single shared refresh promise. Without this, several components mounting at

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -64,6 +65,33 @@ export class CompetitionsService {
         maxTeamSize: dto.maxTeamSize,
       },
     });
+  }
+
+  /// Permanently remove a competition, and only while it is still a draft.
+  ///
+  /// A competition that has left DRAFT may already own rounds, submissions,
+  /// score events and leaderboard standings, and deleting it would take a
+  /// participant's recorded work with it. There is no undo, so the state check
+  /// is the guard rail: ARCHIVED remains the way to retire a competition that
+  /// actually ran. The restriction is enforced here rather than in the UI,
+  /// because a hidden button is not an authorisation check.
+  async remove(id: string) {
+    const existing = await this.prisma.competition.findUnique({
+      where: { id },
+      select: { id: true, state: true },
+    });
+
+    if (!existing) throw new NotFoundException('Competition not found');
+
+    if (existing.state !== CompetitionState.DRAFT) {
+      throw new ConflictException(
+        'Only a draft competition can be deleted. Archive this one instead to keep its results.',
+      );
+    }
+
+    // Rounds, challenges links and participants cascade from the schema's
+    // relations; a draft has no submissions or score events by definition.
+    await this.prisma.competition.delete({ where: { id } });
   }
 
   /// Participants see only competitions that have left DRAFT.
