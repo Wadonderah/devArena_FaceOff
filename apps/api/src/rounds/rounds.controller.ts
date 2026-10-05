@@ -16,7 +16,12 @@ import { CurrentUser, Roles, type AuthenticatedUser } from '../common/decorators
 import { ROLE_RANK } from '../auth/guards/roles.guard';
 import { VerifiedEmailGuard } from '../auth/guards/verified-email.guard';
 import { RoundsService } from './rounds.service';
-import { CreateRoundDto, SetRoundChallengesDto, UpdateRoundDto } from './dto/round.dto';
+import {
+  CreateRoundDto,
+  SetRoundChallengesDto,
+  SetRoundWeightDto,
+  UpdateRoundDto,
+} from './dto/round.dto';
 
 @Controller()
 export class RoundsController {
@@ -101,6 +106,15 @@ export class RoundsController {
   @Roles(Role.ORGANIZER)
   finalize(@Param('id', ParseUUIDPipe) id: string) {
     return this.rounds.transition(id, RoundState.FINALIZED);
+  }
+
+  /// Weight is scoring policy, not round content, so it stays editable after a
+  /// round goes live — unlike PATCH /rounds/:id. Rewrites every score already
+  /// recorded for the round so the leaderboard stays consistent.
+  @Patch('rounds/:id/weight')
+  @Roles(Role.ORGANIZER)
+  setWeight(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetRoundWeightDto) {
+    return this.rounds.setWeight(id, dto.weight);
   }
 
   /// Steps a finalized round back to COMPLETED so a mistake in a published

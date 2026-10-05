@@ -560,6 +560,8 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
   // every action in the row.
   const [pending, setPending] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [weighting, setWeighting] = useState(false);
+  const [weight, setWeight] = useState(String(round.weight ?? ''));
 
   // DRAFT and SCHEDULED are both the states a round can still be edited in and
   // the only ones it can be deleted in — neither has accepted a submission.
@@ -578,6 +580,28 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
         error instanceof ApiError ? error.displayMessage : undefined,
       ),
     onSettled: () => setPending(null),
+  });
+
+  // Weight is scoring policy rather than content, so it stays editable after a
+  // round goes live. Only finalizing (or archiving) locks it, because that is
+  // the point at which a result is published as certified.
+  const scoresLocked = round.state === 'FINALIZED' || round.state === 'ARCHIVED';
+
+  const setRoundWeight = useMutation({
+    mutationFn: () =>
+      api(`/rounds/${round.id}/weight`, {
+        method: 'PATCH',
+        body: { weight: Number(weight) },
+      }),
+    onSuccess: () => {
+      toast.success('Weight updated', 'Scores already recorded for this round were recalculated.');
+      setWeighting(false);
+      onChanged();
+    },
+    onError: (error) => {
+      const { title, detail } = describeError(error, 'Could not change the weight');
+      toast.error(title, detail);
+    },
   });
 
   const remove = useMutation({
@@ -608,7 +632,8 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
             )}
           </div>
           <p className="mt-0.5 text-[13px] text-ink-faint">
-            {round._count.challenges} challenges · order {round.orderIndex}
+            {round._count.challenges} challenges · order {round.orderIndex} · weight{' '}
+            <span className="tabular">{Number(round.weight ?? 0).toFixed(2)}</span>
           </p>
           {transition.error && (
             <p role="alert" className="mt-1 text-[13px] text-danger">
@@ -655,6 +680,19 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
               </Button>
             </>
           )}
+          {!scoresLocked && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setWeighting(!weighting);
+                setEditing(false);
+                setPicking(false);
+              }}
+            >
+              {weighting ? 'Close' : 'Weight'}
+            </Button>
+          )}
           {actions.map((action) => (
             <Button
               key={action.path}
@@ -672,6 +710,39 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
           ))}
         </div>
       </div>
+
+      {weighting && (
+        <form
+          className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface-1 p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setRoundWeight.mutate();
+          }}
+        >
+          <div className="w-36">
+            <Field
+              label="Weight"
+              type="number"
+              step="0.01"
+              min={0}
+              max={1}
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+            />
+          </div>
+
+          <Button type="submit" size="sm" loading={setRoundWeight.isPending}>
+            Save weight
+          </Button>
+
+          {/* Said plainly because it is surprising: this rewrites rows that
+              already exist, rather than only affecting future submissions. */}
+          <p className="w-full text-[12px] leading-relaxed text-ink-faint">
+            Weights across a competition&apos;s rounds must total 1.00. Changing this recalculates
+            every score already recorded for this round, so the leaderboard stays consistent.
+          </p>
+        </form>
+      )}
 
       <ConfirmDialog
         open={confirmingDelete}

@@ -8,7 +8,8 @@ import {
 import { ChallengeType, Prisma, RoundState, RoundType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { seededShuffle } from '../common/shuffle'
-import { canTransition } from './round-state'
+import { canTransition, scoresAreLocked } from './round-state'
+import { weightedContribution } from '../scoring/scoring'
 import type { CreateRoundDto, SetRoundChallengesDto, UpdateRoundDto } from './dto/round.dto'
 
 const CHALLENGE_TYPE_FOR: Record<RoundType, ChallengeType> = {
@@ -119,6 +120,64 @@ export class RoundsService {
                 // ended, and the recorded timeline would be a lie.
                 endsAt: to === RoundState.COMPLETED && !round.endsAt ? now : undefined,
             },
+        })
+    }
+
+    /// Change a round's weight, recomputing every score already recorded for it.
+    ///
+    /// Weight is scoring policy rather than round content, so it is editable
+    /// past the DRAFT/SCHEDULED window that `update()` enforces: an organizer
+    /// who has spent the whole 1.0 budget on two rounds otherwise cannot add a
+    /// third, and cannot free up room either.
+    ///
+    /// The recompute is the entire point. `ScoreEvent` stores `roundWeight` and
+    /// a precomputed `weightedScore`, and the leaderboard SUMs `weightedScore`
+    /// directly, so simply updating the round would leave contributions already
+    /// recorded at the old weight while later ones used the new one — standings
+    /// quietly wrong, with nothing raising an error. Both happen in one
+    /// transaction so a failure cannot leave the two disagreeing.
+    ///
+    /// Exact arithmetic, not re-judging: `rawScore` and `maxRawScore` are both
+    /// already on each row, so no submission is re-run and no result changes.
+    async setWeight(roundId: string, weight: number) {
+        const round = await this.requireRound(roundId)
+
+        // FINALIZED and ARCHIVED are what "certified" means here. Reweighting
+        // them would change a published result after the fact.
+        if (scoresAreLocked(round.state)) {
+            throw new ConflictException(
+                `Scores for a ${round.state} round are locked and its weight cannot change. Unlock it first.`
+            )
+        }
+
+        await this.assertWeightBudget(round.competitionId, roundId, weight)
+
+        return this.prisma.$transaction(async (tx) => {
+            const events = await tx.scoreEvent.findMany({
+                where: { roundId },
+                select: { id: true, rawScore: true, maxRawScore: true },
+            })
+
+            for (const event of events) {
+                await tx.scoreEvent.update({
+                    where: { id: event.id },
+                    data: {
+                        roundWeight: new Prisma.Decimal(weight),
+                        weightedScore: new Prisma.Decimal(
+                            weightedContribution(
+                                event.rawScore.toNumber(),
+                                event.maxRawScore.toNumber(),
+                                weight
+                            )
+                        ),
+                    },
+                })
+            }
+
+            return tx.round.update({
+                where: { id: roundId },
+                data: { weight: new Prisma.Decimal(weight) },
+            })
         })
     }
 
@@ -358,8 +417,16 @@ export class RoundsService {
         const total = siblings.reduce((sum, r) => sum + r.weight.toNumber(), weight)
 
         if (total > 1.0001) {
+            const used = total - weight
+            const remaining = Math.max(0, 1 - used)
+            // Leads with what is actionable. The previous wording opened with
+            // the rejected total, which reads like a ceiling and was taken for
+            // one: "would total 1.5000" was reported back as "the max is 1.5".
             throw new BadRequestException(
-                `Round weights would total ${total.toFixed(4)}; they cannot exceed 1`
+                `Weights must total 1.0 across a competition's rounds. ` +
+                    `The others already use ${used.toFixed(4)}, leaving ${remaining.toFixed(4)} — ` +
+                    `this round's ${weight} would take the total to ${total.toFixed(4)}. ` +
+                    `Lower an existing round's weight to make room.`
             )
         }
     }
