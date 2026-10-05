@@ -8,15 +8,18 @@ import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { TeamCard } from '@/components/team-card';
 import { VerifyBanner } from '@/components/verify-banner';
+import { CompetitionCard, CompetitionRow } from '@/components/competition-card';
 import { useCompetitions, useProfile } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
 import { ArrowRight, CalendarClock, LayoutList, Radio, Trophy } from 'lucide-react';
+import type { ReactNode } from 'react';
+import type { CompetitionListItem } from '@/lib/types';
 
 function CurrentCompetition({ id }: { id: string }) {
   const { data, isLoading } = useCompetition(id);
 
-  if (isLoading) return <Skeleton className="h-48 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-48 w-full rounded-xl" />;
   if (!data) return null;
 
   const live = data.rounds.find((r) => r.state === 'LIVE');
@@ -83,68 +86,146 @@ function CurrentCompetition({ id }: { id: string }) {
   );
 }
 
+/// Groups competitions by what a participant can actually do with them.
+///
+/// The previous dashboard surfaced one competition — the first LIVE or
+/// REGISTRATION match — and dropped the rest into an unlabelled list of names.
+/// With more than one season open, or a live competition sitting behind one
+/// taking registrations, that hid the thing the participant came for.
+function groupByState(competitions: CompetitionListItem[]) {
+  return {
+    live: competitions.filter((c) => c.state === 'LIVE'),
+    open: competitions.filter((c) => c.state === 'REGISTRATION'),
+    past: competitions.filter((c) => c.state === 'COMPLETED' || c.state === 'ARCHIVED'),
+  };
+}
+
+function Section({
+  icon: Icon,
+  title,
+  blurb,
+  children,
+}: {
+  icon: typeof Radio;
+  title: string;
+  blurb: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="mt-9">
+      <div className="mb-3.5">
+        <h2 className="inline-flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.12em] text-ink-faint">
+          <Icon aria-hidden size={14} strokeWidth={1.5} />
+          {title}
+        </h2>
+        {/* Every section says what it is for. "Open for registration" is
+            obvious to whoever built it and not to a first-time participant. */}
+        <p className="mt-1 text-[13px] text-ink-faint">{blurb}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function DashboardContent() {
   const { data: profile } = useProfile();
   const { data: competitions, isLoading } = useCompetitions();
 
-  const active = competitions?.find(
-    (c) => c.state === 'LIVE' || c.state === 'REGISTRATION',
-  );
+  const grouped = groupByState(competitions ?? []);
+
+  // The one that gets the detailed panel: live beats merely open.
+  const focus = grouped.live[0] ?? grouped.open[0] ?? null;
+
+  // ...and it is then excluded from the lists below, so it is not shown twice
+  // in two different shapes on the same screen.
+  const live = grouped.live.filter((c) => c.id !== focus?.id);
+  const open = grouped.open.filter((c) => c.id !== focus?.id);
+  const past = grouped.past;
+  const hasAny = (competitions?.length ?? 0) > 0;
 
   return (
     <>
       <VerifyBanner />
 
-      <header className="mb-8">
+      <header className="mb-2">
         <h1 className="text-3xl">
           {profile?.profile?.displayName
             ? `Welcome back, ${profile.profile.displayName.split(' ')[0]}`
             : 'Dashboard'}
         </h1>
-        <p className="mt-1.5 text-[15px] text-ink-dim">
-          Your current round, your rank, and what to do next.
+        <p className="mt-1.5 max-w-prose text-[15px] leading-relaxed text-ink-dim">
+          Everything you can take part in right now. A competition runs in timed rounds: answer
+          multiple-choice questions, write code against hidden tests, then fix a broken program.
         </p>
       </header>
 
       {isLoading ? (
-        <SkeletonRows rows={3} />
-      ) : active ? (
-        <div className="space-y-4">
-          <TeamCard competitionId={active.id} />
-          <CurrentCompetition id={active.id} />
+        <div className="mt-8">
+          <SkeletonRows rows={3} />
         </div>
-      ) : (
-        <div className="panel p-10 text-center">
-          <h2 className="text-lg">No active competition</h2>
-          <p className="mt-2 text-[14px] text-ink-dim">
-            Nothing is running right now. Check back when the organizer opens the next season.
+      ) : !hasAny ? (
+        <div className="panel mt-8 p-10 text-center">
+          <h2 className="text-lg">Nothing running yet</h2>
+          <p className="mx-auto mt-2 max-w-sm text-[14px] leading-relaxed text-ink-dim">
+            No competition has opened. When an organizer starts the next season it appears here,
+            and you will be able to join from this page.
           </p>
         </div>
-      )}
+      ) : (
+        <>
+          {/* The one you are most likely here for keeps the detailed panel:
+              your team, and the round that is open or next. */}
+          {focus && (
+            <div className="mt-8 space-y-4">
+              <TeamCard competitionId={focus.id} />
+              <CurrentCompetition id={focus.id} />
+            </div>
+          )}
 
-      {competitions && competitions.length > 1 && (
-        <section className="mt-10">
-          <h2 className="mb-3 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-ink-faint">
-            <LayoutList aria-hidden size={14} strokeWidth={1.5} />
-            All competitions
-          </h2>
-          <ul className="space-y-2">
-            {competitions.map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/competitions/${c.id}`}
-                  className="flex items-center justify-between rounded-xl border border-line bg-surface-1 px-4 py-3 transition-colors hover:border-line-bright hover:bg-surface-2"
-                >
-                  <span className="inline-flex items-center gap-2.5 text-[15px]">
-                    <Trophy aria-hidden size={15} strokeWidth={1.5} className="text-ink-faint" />
-                    {c.name}
-                  </span>
-                  <CompetitionStateBadge state={c.state} />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+          {live.length > 0 && (
+            <Section
+              icon={Radio}
+              title={`Also live · ${live.length}`}
+              blurb="Rounds are running in these too. Scores are recorded as people submit."
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                {live.map((c) => (
+                  <CompetitionCard key={c.id} competition={c} />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {open.length > 0 && (
+            <Section
+              icon={LayoutList}
+              title={open.length === 1 ? 'Open for registration' : `Open for registration · ${open.length}`}
+              blurb="Not started yet. Join now and form a team before the first round opens."
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                {open.map((c) => (
+                  <CompetitionCard key={c.id} competition={c} />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {past.length > 0 && (
+            <Section
+              icon={Trophy}
+              title="Finished"
+              blurb="Closed to new submissions. Final standings are still readable."
+            >
+              <ul className="space-y-2">
+                {past.map((c) => (
+                  <li key={c.id}>
+                    <CompetitionRow competition={c} />
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+        </>
       )}
     </>
   );
