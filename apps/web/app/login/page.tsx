@@ -1,16 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useState, type FormEvent } from 'react'
-import { api, ApiError } from '@/lib/api'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useState, type FormEvent } from 'react'
+import { api, describeError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/input'
 import { AuthBackdrop } from '@/components/auth-backdrop'
 import { BrandMark } from '@/components/brand-mark'
+import { Skeleton } from '@/components/ui/skeleton'
+import { safeReturnTo } from '@/lib/safe-return-to'
 
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter()
+    const params = useSearchParams()
+    const returnTo = safeReturnTo(params.get('returnTo'))
+    const expired = params.get('reason') === 'expired'
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
@@ -23,9 +28,9 @@ export default function LoginPage() {
 
         try {
             await api('/auth/login', { method: 'POST', body: { email, password } })
-            router.push('/dashboard')
+            router.push(returnTo)
         } catch (err) {
-            setError(err instanceof ApiError ? err.displayMessage : 'Something went wrong')
+            setError(describeError(err, 'Something went wrong').detail)
             setPending(false)
         }
     }
@@ -53,6 +58,17 @@ export default function LoginPage() {
                         Welcome back. Let&apos;s get you competing.
                     </p>
                 </div>
+
+                {/* Says the two things a participant bounced out mid-round needs
+                    to know: why they are here, and that their work survived. */}
+                {expired && (
+                    <div
+                        role="status"
+                        className="mb-5 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-[14px] text-ink-dim"
+                    >
+                        Your session ended. Sign in again and your code will still be here.
+                    </div>
+                )}
 
                 {/*
         method="post" matters even though onSubmit handles the request. A form
@@ -107,5 +123,19 @@ export default function LoginPage() {
                 </p>
             </div>
         </main>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense
+            fallback={
+                <main className="flex min-h-dvh items-center justify-center px-5">
+                    <Skeleton className="h-96 w-full max-w-md rounded-xl" />
+                </main>
+            }
+        >
+            <LoginForm />
+        </Suspense>
     )
 }

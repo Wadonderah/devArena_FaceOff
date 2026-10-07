@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useCurrentUser } from '@/lib/hooks';
 import { ApiError } from '@/lib/api';
@@ -18,6 +18,7 @@ export function AuthGate({
   requireSuperAdmin?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { data: user, isLoading, isError, error, isFetching } = useCurrentUser();
 
   // Only an actual authentication failure ends the session. Redirecting on ANY
@@ -25,9 +26,22 @@ export function AuthGate({
   // mid-round with a perfectly valid session.
   const unauthenticated = error instanceof ApiError && error.status === 401;
 
+  // Reaching here means the session really is gone: the API client already
+  // tried a refresh and it failed. Carry where they were, so a participant
+  // bounced out of a round returns to that round rather than the dashboard.
+  //
+  // Relative paths only, built from `usePathname()`, so this cannot be turned
+  // into an open redirect.
   useEffect(() => {
-    if (unauthenticated) router.replace('/login');
-  }, [unauthenticated, router]);
+    if (!unauthenticated) return;
+
+    const target =
+      pathname && pathname !== '/login'
+        ? `/login?returnTo=${encodeURIComponent(pathname)}&reason=expired`
+        : '/login';
+
+    router.replace(target);
+  }, [unauthenticated, router, pathname]);
 
   useEffect(() => {
     if (user && requireStaff && user.role === 'PARTICIPANT') router.replace('/dashboard');

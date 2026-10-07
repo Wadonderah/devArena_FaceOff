@@ -11,7 +11,8 @@ import { Badge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, describeError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
-import { useCountdown, useRound, useSubmission } from '@/lib/hooks';
+import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
+import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
 import type { Challenge, Language, RunResult } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -203,6 +204,7 @@ function Problem({
   const [code, setCode] = useState('');
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [runResults, setRunResults] = useState<RunResult[] | null>(null);
+  const [seeded, setSeeded] = useState(false);
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -212,11 +214,35 @@ function Problem({
     retry: false,
   });
 
-  // Seed the editor from starter code when the challenge loads or the language
-  // changes, without clobbering work already typed for the same language.
+  const { data: me } = useCurrentUser();
+
+  const draft = useDraft({
+    userId: me?.id,
+    challengeId,
+    language,
+    value: code,
+    // Nothing is saved until the editor has been seeded, or the first render
+    // would write an empty string over a stored draft before restore runs.
+    ready: seeded,
+  });
+
+  // Seed the editor when the challenge loads or the language changes.
+  //
+  // A stored draft wins over the starter code: if someone was signed out
+  // mid-round, or closed the tab, the work they already did is what they expect
+  // to find — being handed a blank template instead is the thing this whole
+  // change exists to prevent.
   useEffect(() => {
-    if (challenge) setCode(starterFor(challenge, language));
-  }, [challenge, language]);
+    if (!challenge) return;
+
+    setSeeded(false);
+    const saved = draft.restore();
+    setCode(saved ?? starterFor(challenge, language));
+    setSeeded(true);
+    // `draft` is intentionally omitted: restore() is keyed on the same values
+    // this effect already depends on, and including it re-seeds on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challenge, language, me?.id]);
 
   const run = useMutation({
     mutationFn: () =>
@@ -240,6 +266,9 @@ function Problem({
       // Grading is asynchronous, so without this the button just stops spinning
       // and nothing visibly happens until the poll returns a verdict.
       toast.success('Submitted for grading', 'Your result appears below when the judge finishes.');
+      // Safely on the server now, so a stale local copy must not resurface over
+      // a later attempt.
+      draft.clear();
       setSubmissionId(data.id);
       setRunResults(null);
       queryClient.invalidateQueries({ queryKey: ['my-submissions', roundId] });
