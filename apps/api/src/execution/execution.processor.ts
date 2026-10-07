@@ -7,13 +7,26 @@ import {
   ScoreSource,
   SubmissionStatus,
 } from '@prisma/client';
-import type { Job } from 'bullmq';
+import { UnrecoverableError, type Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { gradeCoding } from '../scoring/scoring';
-import { Judge0Client, type Judge0SubmissionSpec } from './judge0.client';
+import { Judge0Client, Judge0RequestError, type Judge0SubmissionSpec } from './judge0.client';
 import { EXECUTION_QUEUE, type GradeSubmissionJob } from './execution.constants';
 import { isPass, isPlatformFault, LANGUAGE_IDS, toOutcome } from './judge0.status';
+
+/// What a participant sees when grading failed on our side.
+///
+/// It used to say "An organizer has been notified", which was false: nothing in
+/// the API alerts anyone. The only organizer-facing signal is a counter on the
+/// admin console that someone has to go and look at. Claiming otherwise told a
+/// participant to sit and wait for help that was not coming.
+///
+/// Item 7 adds in-app notifications; when GRADING_ALERT is wired to this path,
+/// the sentence can be restored because it will then be true.
+export const GRADING_FAILED_MESSAGE =
+  'We could not grade that attempt. Something went wrong on our side, not in your code, ' +
+  'and it does not count against your attempts. Try submitting again.';
 
 @Processor(EXECUTION_QUEUE)
 export class ExecutionProcessor extends WorkerHost {
@@ -98,8 +111,32 @@ export class ExecutionProcessor extends WorkerHost {
     const executable =
       submission?.challenge.codingChallenge ?? submission?.challenge.debuggingChallenge;
 
-    if (!submission || !executable) {
-      this.logger.error(`Submission ${submissionId} has no executable challenge`);
+    if (!submission) {
+      // Nothing to grade and nothing to mark. Returning is right: a deleted
+      // submission must not fail the job forever.
+      this.logger.error(`Submission ${submissionId} no longer exists`);
+      return;
+    }
+
+    if (!executable) {
+      // Previously this returned silently, which left the row at QUEUED for
+      // ever: no retry, no onFailed, no error — just a submission that never
+      // resolved and a participant watching a spinner. Throwing routes it
+      // through the normal failure path so it ends up visibly SYSTEM_ERROR.
+      throw new Error(`Submission ${submissionId} has no executable challenge`);
+    }
+
+    // Grading is idempotent by refusing to run twice.
+    //
+    // BullMQ can redeliver a job — a stalled worker, a redeploy mid-flight, a
+    // manual retry — and nothing here checked. A redelivery would flip a graded
+    // submission back to RUNNING and re-run it, so a participant's finished
+    // result briefly became "Running your code…" again, and the score was
+    // rewritten from a second execution of the same source.
+    if (submission.status === SubmissionStatus.COMPLETED) {
+      this.logger.warn(
+        `Submission ${submissionId} is already COMPLETED; skipping redelivered grading job`,
+      );
       return;
     }
 
@@ -122,8 +159,26 @@ export class ExecutionProcessor extends WorkerHost {
       maxFileSizeKb: coding.maxFileSizeKb,
     }));
 
-    const tokens = await this.judge0.submitBatch(specs);
-    const results = await this.judge0.awaitBatch(tokens);
+    // A request Judge0 has already rejected as invalid cannot succeed on a
+    // second attempt, so it is converted to BullMQ's UnrecoverableError, which
+    // skips the remaining attempts and goes straight to onFailed. Retrying it
+    // only delays the participant's answer and spends queue capacity during a
+    // live round. Everything else — timeouts, 5xx, a dropped connection — still
+    // gets the full three attempts.
+    let tokens: string[];
+    let results: Awaited<ReturnType<Judge0Client['awaitBatch']>>;
+
+    try {
+      tokens = await this.judge0.submitBatch(specs);
+      results = await this.judge0.awaitBatch(tokens);
+    } catch (error) {
+      if (error instanceof Judge0RequestError) {
+        throw new UnrecoverableError(
+          `Judge0 rejected submission ${submissionId}: ${error.message}`,
+        );
+      }
+      throw error;
+    }
 
     // A platform fault means the grading service failed, not the participant's
     // code. Throwing here lets BullMQ retry; only an exhausted retry budget
@@ -246,20 +301,39 @@ export class ExecutionProcessor extends WorkerHost {
   async onFailed(job: Job<GradeSubmissionJob>, error: Error): Promise<void> {
     const attemptsMade = job.attemptsMade;
     const maxAttempts = job.opts.attempts ?? 1;
+    const submissionId = job.data.submissionId;
 
+    // Every attempt is logged, not just the last, with the attempt number and
+    // the underlying cause — otherwise two transient blips and a real fault are
+    // indistinguishable after the fact.
     this.logger.error(
-      `Grading attempt ${attemptsMade}/${maxAttempts} failed for submission ${job.data.submissionId}: ${error.message}`,
+      `Grading attempt ${attemptsMade}/${maxAttempts} failed for submission ${submissionId}: ${error.message}`,
     );
 
-    if (attemptsMade >= maxAttempts) {
-      await this.prisma.submission.update({
-        where: { id: job.data.submissionId },
-        data: {
-          status: SubmissionStatus.SYSTEM_ERROR,
-          errorMessage: 'Grading failed. An organizer has been notified — this is not your fault.',
-          gradedAt: new Date(),
-        },
-      });
+    if (attemptsMade < maxAttempts) return;
+
+    // `status: { not: COMPLETED }` is the guard, and updateMany is what makes it
+    // expressible.
+    //
+    // The status transaction and the score write are separate steps, so a
+    // failure in the second one fails the job after the first has already
+    // committed. Without this, the third such failure relabelled a graded
+    // submission as SYSTEM_ERROR while its score and passed-test counts stayed
+    // on the row — the participant saw "we could not grade that attempt" over a
+    // result that had, in fact, been graded and counted.
+    const { count } = await this.prisma.submission.updateMany({
+      where: { id: submissionId, status: { not: SubmissionStatus.COMPLETED } },
+      data: {
+        status: SubmissionStatus.SYSTEM_ERROR,
+        errorMessage: GRADING_FAILED_MESSAGE,
+        gradedAt: new Date(),
+      },
+    });
+
+    if (count === 0) {
+      this.logger.warn(
+        `Grading job for ${submissionId} exhausted its attempts, but the submission is already COMPLETED; leaving the result intact`,
+      );
     }
   }
 }
