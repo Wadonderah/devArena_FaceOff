@@ -66,7 +66,7 @@ function LoginForm() {
                         role="status"
                         className="mb-5 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-[14px] text-ink-dim"
                     >
-                        Your session ended. Sign in again and your code will still be here.
+                        Your session ended. Sign in again.
                     </div>
                 )}
 
