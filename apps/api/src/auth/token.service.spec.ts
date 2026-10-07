@@ -25,14 +25,20 @@ const user = {
   isActive: true,
 };
 
-function makePrisma(stored: unknown) {
+function makePrisma(stored: unknown, claimCount = 1) {
   const refreshToken = {
     create: jest.fn().mockResolvedValue({}),
     findUnique: jest.fn().mockResolvedValue(stored),
     update: jest.fn().mockResolvedValue({}),
-    updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+    // Rotation claims the row with a conditional updateMany; `claimCount: 0`
+    // simulates losing that race to a concurrent refresh.
+    updateMany: jest.fn().mockResolvedValue({ count: claimCount }),
   };
-  return { refreshToken, asPrisma: { refreshToken } as unknown as PrismaService };
+  const asPrisma = {
+    refreshToken,
+    $transaction: jest.fn((fn: (tx: unknown) => unknown) => fn({ refreshToken })),
+  } as unknown as PrismaService;
+  return { refreshToken, asPrisma };
 }
 
 const createdData = (mock: jest.Mock, call = 0) =>
@@ -198,8 +204,10 @@ describe('TokenService', () => {
 
       const issued = await service.rotate('valid');
 
-      expect(prisma.refreshToken.update).toHaveBeenCalledWith({
-        where: { id: 'rt-1' },
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        // `revokedAt: null` is the compare-and-swap: it is what stops two
+        // concurrent refreshes both rotating the same parent token.
+        where: { id: 'rt-1', revokedAt: null },
         data: {
           revokedAt: expect.any(Date),
           // A genuine rotation always mints a replacement; only grace replays return null.
@@ -250,13 +258,65 @@ describe('TokenService', () => {
 
       const issued = await service.rotate('valid');
 
-      expect(prisma.refreshToken.update).toHaveBeenCalledWith({
-        where: { id: 'rt-1' },
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { id: 'rt-1', revokedAt: null },
         data: expect.objectContaining({ revokedAt: expect.any(Date) }),
       });
       expect(createdData(prisma.refreshToken.create).familyId).toBe('family-1');
       expect(issued.accessToken).toBeTruthy();
       expect(issued.refreshToken).toBeTruthy();
+    });
+
+    // The reason rotation is a compare-and-swap. Several tabs refreshing at once
+    // is the ordinary case, not an edge case: before this, both could pass the
+    // revokedAt check, both mint a child, and the family would hold two live
+    // tokens with last-write-wins on the parent row.
+    it('mints only one replacement when two rotations race', async () => {
+      const stored = {
+        id: 'rt-1',
+        userId: user.id,
+        familyId: 'family-1',
+        expiresAt: future(),
+        revokedAt: null,
+        user,
+      };
+      // claimCount 0 — the conditional update matched nothing, so another
+      // request already rotated this token.
+      const prisma = makePrisma(stored, 0);
+      const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+      const issued = await service.rotate('valid');
+
+      // No second child token.
+      expect(prisma.refreshToken.create).not.toHaveBeenCalled();
+      // The loser still gets to finish its request...
+      expect(issued.accessToken).toBeTruthy();
+      // ...but must not overwrite the cookie the winner just set.
+      expect(issued.refreshToken).toBeNull();
+    });
+
+    it('does not treat a lost race as token theft', async () => {
+      const prisma = makePrisma(
+        {
+          id: 'rt-1',
+          userId: user.id,
+          familyId: 'family-1',
+          expiresAt: future(),
+          revokedAt: null,
+          user,
+        },
+        0,
+      );
+      const service = new TokenService(jwt, prisma.asPrisma, config, audit);
+
+      // `audit` is a module-level double shared by every test in this file and
+      // is never reset, so it must be cleared here to assert about this call.
+      (audit.record as jest.Mock).mockClear();
+
+      await expect(service.rotate('valid')).resolves.toBeDefined();
+      // revokeFamily would be a second updateMany keyed on familyId.
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledTimes(1);
+      expect(audit.record).not.toHaveBeenCalled();
     });
   });
 });

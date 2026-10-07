@@ -1,5 +1,6 @@
 import type { CookieOptions, Response } from 'express';
 import type { AppConfigService } from '../config/config.service';
+import { parseDuration } from '../common/duration';
 
 export const ACCESS_COOKIE = 'faceoff_at';
 export const REFRESH_COOKIE = 'faceoff_rt';
@@ -24,10 +25,14 @@ export function setAuthCookies(
 ): void {
   const base = baseOptions(config);
 
+  // Derived from ACCESS_TOKEN_TTL, the same value the JWT is signed with, so
+  // the cookie and the token it carries expire together. These used to be set
+  // independently — `15m` in config, `15 * 60 * 1000` here — and agreed only
+  // because both defaults happened to match.
   res.cookie(ACCESS_COOKIE, tokens.accessToken, {
     ...base,
     path: '/',
-    maxAge: 15 * 60 * 1000,
+    maxAge: parseDuration(config.get('ACCESS_TOKEN_TTL')),
   });
 
   // A null refresh token means "leave the one the browser has" — it is newer

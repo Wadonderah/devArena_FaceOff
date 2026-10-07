@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseDuration } from '../common/duration';
 
 /// Resend API keys are prefixed. Checking it at boot catches a truncated key, or
 /// one pasted from a different service, before it becomes a 401 on first send.
@@ -38,7 +39,22 @@ export const envSchema = z
 
     JWT_ACCESS_SECRET: z.string().min(32),
     JWT_REFRESH_SECRET: z.string().min(32),
-    ACCESS_TOKEN_TTL: z.string().default('15m'),
+    // Validated rather than taken on trust: it now also sets the access
+    // cookie's lifetime, so a malformed value would throw on the first login
+    // instead of at boot, and only for whoever happened to log in first.
+    ACCESS_TOKEN_TTL: z
+      .string()
+      .default('15m')
+      .refine(
+        (v) => {
+          try {
+            return parseDuration(v) > 0;
+          } catch {
+            return false;
+          }
+        },
+        { message: 'must be a duration such as 15m, 2h or 900' },
+      ),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
 
     COOKIE_DOMAIN: optional(z.string().min(1)),

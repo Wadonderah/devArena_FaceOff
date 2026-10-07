@@ -80,6 +80,19 @@ async function refreshSession(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/// Routes that must never trigger a refresh-and-retry on 401.
+///
+/// This replaced a blanket `!path.startsWith('/auth/')`, which was too broad by
+/// exactly one route: `/auth/me` is the call that decides whether you are signed
+/// in, and excluding it meant an expired access cookie signed you out even
+/// though a perfectly good refresh cookie was sitting in the browser. Nothing
+/// retried, so the Network tab showed no refresh attempt at all.
+///
+/// What genuinely belongs here is only what would recurse or is meaningless to
+/// retry: refreshing the refresh call, and the three routes whose 401 is the
+/// answer rather than an error.
+const NO_REFRESH_RETRY = new Set(['/auth/refresh', '/auth/login', '/auth/register', '/auth/logout']);
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -98,7 +111,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     signal,
   });
 
-  if (res.status === 401 && retryOnUnauthorized && !path.startsWith('/auth/')) {
+  if (res.status === 401 && retryOnUnauthorized && !NO_REFRESH_RETRY.has(path.split('?')[0])) {
     if (await refreshSession()) {
       return api<T>(path, { ...options, retryOnUnauthorized: false });
     }

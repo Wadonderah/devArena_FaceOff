@@ -11,7 +11,8 @@ import { Badge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
-import { useCountdown, useRound, useSubmission } from '@/lib/hooks';
+import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
+import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
 import { LANGUAGE_LABELS } from '@/lib/taxonomy';
 import type { Challenge, Language, RunResult } from '@/lib/types';
@@ -124,6 +125,7 @@ function DebuggingWorkspace({
 }) {
   const [language, setLanguage] = useState<Language>(languages[0] ?? 'PYTHON');
   const [code, setCode] = useState('');
+  const [seeded, setSeeded] = useState(false);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [runResults, setRunResults] = useState<RunResult[] | null>(null);
   const queryClient = useQueryClient();
@@ -137,12 +139,32 @@ function DebuggingWorkspace({
 
   const bug = challenge?.debuggingChallenge;
 
+  const { data: me } = useCurrentUser();
+
+  const draft = useDraft({
+    userId: me?.id,
+    challengeId,
+    language,
+    value: code,
+    ready: seeded,
+  });
+
   // Reset to the broken code when the challenge loads or the language changes.
   // Starting from a blank editor would defeat the point — the participant is
   // meant to read and repair this, not rewrite it.
+  //
+  // A saved draft takes precedence, because a half-finished repair is worth
+  // more than the untouched original the participant can already see described
+  // in the bug report.
   useEffect(() => {
-    if (bug) setCode(bug.brokenCode[language] ?? '');
-  }, [bug, language]);
+    if (!bug) return;
+
+    setSeeded(false);
+    const saved = draft.restore();
+    setCode(saved ?? bug.brokenCode[language] ?? '');
+    setSeeded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bug, language, me?.id]);
 
   const run = useMutation({
     mutationFn: () =>
@@ -166,6 +188,7 @@ function DebuggingWorkspace({
       // Grading is asynchronous, so without this the button just stops spinning
       // and nothing visibly happens until the poll returns a verdict.
       toast.success('Submitted for grading', 'Your result appears below when the judge finishes.');
+      draft.clear();
       setSubmissionId(data.id);
       setRunResults(null);
       queryClient.invalidateQueries({ queryKey: ['my-submissions', roundId] });
