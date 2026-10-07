@@ -68,4 +68,30 @@ describe('Judge0 status mapping', () => {
     expect(isPlatformFault(JUDGE0_STATUS.WRONG_ANSWER)).toBe(false);
     expect(isPlatformFault(JUDGE0_STATUS.RUNTIME_ERROR_NZEC)).toBe(false);
   });
+
+  // toOutcome already sent anything unrecognised to INTERNAL_ERROR, but this
+  // predicate listed only the two known ids. A status Judge0 adds later was
+  // therefore RECORDED as a platform error while being SCORED as a failed test:
+  // the participant silently lost the points and nothing retried. The two must
+  // agree, so an unmapped terminal status is a fault on our side.
+  it('treats an unrecognised terminal status as a platform fault', () => {
+    expect(toOutcome(99)).toBe(ExecutionOutcome.INTERNAL_ERROR);
+    expect(isPlatformFault(99)).toBe(true);
+  });
+
+  it('agrees with toOutcome for every status either knows about', () => {
+    for (const statusId of [...Object.values(JUDGE0_STATUS), 42, 99, 1000]) {
+      if (!isTerminal(statusId)) continue;
+      // The invariant: anything reported as an internal error must also be
+      // retryable, and nothing else may be.
+      expect(isPlatformFault(statusId)).toBe(toOutcome(statusId) === ExecutionOutcome.INTERNAL_ERROR);
+    }
+  });
+
+  // Pending statuses are absent from the outcome map by design; they are
+  // isTerminal's business, not this predicate's.
+  it('does not mistake a pending status for a fault', () => {
+    expect(isPlatformFault(JUDGE0_STATUS.IN_QUEUE)).toBe(false);
+    expect(isPlatformFault(JUDGE0_STATUS.PROCESSING)).toBe(false);
+  });
 });

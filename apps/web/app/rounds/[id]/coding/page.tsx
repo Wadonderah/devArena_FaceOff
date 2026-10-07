@@ -14,10 +14,10 @@ import { useToast } from '@/components/ui/toast';
 import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
 import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
+import { GradingFailed } from '@/components/grading-failed';
 import type { Challenge, Language, RunResult } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { LANGUAGE_LABELS } from '@/lib/taxonomy';
-import { RotateCw } from 'lucide-react';
 
 function starterFor(challenge: Challenge, language: Language): string {
   const coding = challenge.codingChallenge;
@@ -71,29 +71,7 @@ function SubmissionPanel({
   }
 
   if (data.status === 'SYSTEM_ERROR') {
-    // A SYSTEM_ERROR means the judge itself failed, not the submitted code: the
-    // worker already retried three times with backoff before giving up. It does
-    // not consume an attempt, so re-submitting is free — but nothing on screen
-    // used to say so, and the raw errorMessage read like the participant's
-    // fault.
-    return (
-      <div
-        role="alert"
-        className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3.5"
-      >
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-warn">We could not grade that attempt</p>
-          <p className="mt-0.5 text-[13px] leading-relaxed text-ink-dim">
-            Something went wrong on our side, not in your code. This does not count against your
-            attempts, so you can submit the same solution again.
-          </p>
-        </div>
-
-        <Button size="sm" variant="secondary" loading={retrying} icon={<RotateCw />} onClick={onRetry}>
-          Try again
-        </Button>
-      </div>
-    );
+    return <GradingFailed onRetry={onRetry} retrying={retrying} />;
   }
 
   const passed = data.passedTests ?? 0;
