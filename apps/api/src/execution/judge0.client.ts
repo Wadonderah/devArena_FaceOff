@@ -163,10 +163,39 @@ export class Judge0Client {
     if (!response.ok) {
       const detail = await response.text().catch(() => '');
       this.logger.error(`Judge0 ${method} ${path} -> ${response.status} ${detail}`);
-      throw new ServiceUnavailableException('The grading service rejected the request');
+
+      // 4xx and 5xx used to raise the same exception, so a permanently
+      // malformed request — a bad language id, an oversized payload, a revoked
+      // auth token — consumed all three BullMQ attempts and waited out the
+      // backoff before failing anyway. Retrying something Judge0 has already
+      // judged invalid cannot succeed; it only delays the participant's answer
+      // and spends the queue's capacity during a live round.
+      //
+      // 429 is the exception among 4xx: it is explicitly "try later".
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        throw new Judge0RequestError(
+          `The grading service rejected the request (${response.status})`,
+        );
+      }
+
+      throw new ServiceUnavailableException('The grading service is unavailable');
     }
 
     return (await response.json()) as T;
+  }
+}
+
+/// A fault in the request we sent, not in the service we sent it to.
+///
+/// Separated from ServiceUnavailableException so the grading worker can tell
+/// "this will never succeed" from "this might succeed in two seconds", and stop
+/// retrying the first kind.
+export class Judge0RequestError extends Error {
+  readonly retryable = false;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'Judge0RequestError';
   }
 }
 
