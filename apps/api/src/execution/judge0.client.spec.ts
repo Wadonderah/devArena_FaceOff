@@ -1,5 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
-import { Judge0Client, MAX_OUTPUT_BYTES, type Judge0SubmissionSpec } from './judge0.client';
+import { Judge0Client, Judge0RequestError, MAX_OUTPUT_BYTES, type Judge0SubmissionSpec } from './judge0.client';
 import { JUDGE0_STATUS } from './judge0.status';
 import type { AppConfigService } from '../config/config.service';
 
@@ -176,16 +176,60 @@ describe('Judge0Client', () => {
       await expect(new Judge0Client(config).about()).rejects.not.toThrow(/ECONNREFUSED/);
     });
 
-    it('surfaces a rejected request as unavailable', async () => {
+    // 4xx and 5xx used to raise the same exception, so a permanently invalid
+    // request consumed all three BullMQ attempts and made the participant wait
+    // out the backoff for an answer that could never change. The two are now
+    // distinguishable, and the grading worker uses that to stop retrying what
+    // cannot succeed.
+    it.each([400, 401, 403, 404, 422])(
+      'treats %i as a fault in the request, not the service',
+      async (status) => {
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status,
+          text: async () => 'rejected',
+        }) as unknown as typeof fetch;
+
+        await expect(new Judge0Client(config).about()).rejects.toThrow(Judge0RequestError);
+      },
+    );
+
+    it.each([500, 502, 503, 504])('treats %i as transient, so it retries', async (status) => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status,
+        text: async () => 'upstream exploded',
+      }) as unknown as typeof fetch;
+
+      await expect(new Judge0Client(config).about()).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+      await expect(new Judge0Client(config).about()).rejects.not.toThrow(Judge0RequestError);
+    });
+
+    // The one 4xx that means "try later" rather than "this is wrong".
+    it('treats 429 as transient despite being a 4xx', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'slow down',
+      }) as unknown as typeof fetch;
+
+      await expect(new Judge0Client(config).about()).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('marks a request fault as non-retryable for the worker to read', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,
         status: 401,
         text: async () => 'unauthorized',
       }) as unknown as typeof fetch;
 
-      await expect(new Judge0Client(config).about()).rejects.toThrow(
-        ServiceUnavailableException,
-      );
+      await expect(new Judge0Client(config).about()).rejects.toMatchObject({
+        retryable: false,
+      });
     });
   });
 });

@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/toast';
 import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
 import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
+import { GradingFailed } from '@/components/grading-failed';
 import { LANGUAGE_LABELS } from '@/lib/taxonomy';
 import type { Challenge, Language, RunResult } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -35,7 +36,15 @@ function Verdict({ passed, label }: { passed: boolean; label: string }) {
   );
 }
 
-function SubmissionPanel({ submissionId }: { submissionId: string }) {
+function SubmissionPanel({
+  submissionId,
+  onRetry,
+  retrying,
+}: {
+  submissionId: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
   const { data } = useSubmission(submissionId);
 
   if (!data) return <Skeleton className="h-24 w-full rounded-xl" />;
@@ -55,11 +64,7 @@ function SubmissionPanel({ submissionId }: { submissionId: string }) {
   }
 
   if (data.status === 'SYSTEM_ERROR') {
-    return (
-      <div role="alert" className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3.5">
-        <p className="text-[14px] text-warn">{data.errorMessage}</p>
-      </div>
-    );
+    return <GradingFailed onRetry={onRetry} retrying={retrying} />;
   }
 
   const passed = data.passedTests ?? 0;
@@ -319,7 +324,16 @@ function DebuggingWorkspace({
         )}
 
         <AnimatePresence mode="wait">
-          {submissionId && <SubmissionPanel key={submissionId} submissionId={submissionId} />}
+          {submissionId && (
+            <SubmissionPanel
+              key={submissionId}
+              submissionId={submissionId}
+              // Resubmits the editor's current contents, so a participant who
+              // adjusted something after the failure retries what they can see.
+              onRetry={() => submit.mutate()}
+              retrying={submit.isPending}
+            />
+          )}
           {runResults && (
             <motion.div
               key="run"

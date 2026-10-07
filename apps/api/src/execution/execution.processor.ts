@@ -118,14 +118,6 @@ export class ExecutionProcessor extends WorkerHost {
       return;
     }
 
-    if (!executable) {
-      // Previously this returned silently, which left the row at QUEUED for
-      // ever: no retry, no onFailed, no error — just a submission that never
-      // resolved and a participant watching a spinner. Throwing routes it
-      // through the normal failure path so it ends up visibly SYSTEM_ERROR.
-      throw new Error(`Submission ${submissionId} has no executable challenge`);
-    }
-
     // Grading is idempotent by refusing to run twice.
     //
     // BullMQ can redeliver a job — a stalled worker, a redeploy mid-flight, a
@@ -138,6 +130,14 @@ export class ExecutionProcessor extends WorkerHost {
         `Submission ${submissionId} is already COMPLETED; skipping redelivered grading job`,
       );
       return;
+    }
+
+    if (!executable) {
+      // Previously this returned silently, which left the row at QUEUED for
+      // ever: no retry, no onFailed, no error — just a submission that never
+      // resolved and a participant watching a spinner. Throwing routes it
+      // through the normal failure path so it ends up visibly SYSTEM_ERROR.
+      throw new Error(`Submission ${submissionId} has no executable challenge`);
     }
 
     const coding = executable;
