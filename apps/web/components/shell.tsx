@@ -71,78 +71,59 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const initial = (user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-dvh flex flex-col">
-      {/* A floating pill rather than a full-width bar with a bottom rule —
-          the shape every reference uses, and it lets the background show
-          through on both sides instead of slicing the page in two. */}
-      <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
-        {/* One row on desktop, two on a phone.
-            
-            As a single row the right-hand group and the brand consumed almost
-            the whole width at 390px, leaving the nav a sliver that scrolled
-            horizontally with no visible affordance — so an organizer could not
-            reach the console from their phone at all. Wrapping lets the links
-            take a full-width second row where they are actually tappable.
-            
-            `order` rather than duplicated markup, so each control exists once in
-            the DOM and the tab order stays sensible in both layouts. */}
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface-0/80 px-3 py-2.5 backdrop-blur-xl sm:h-14 sm:flex-nowrap sm:gap-6 sm:px-5 sm:py-0">
-          {/* The monogram, not the full logo. The logo is a detailed circular
-              illustration that needs room: at nav scale it is a colour blob,
-              and sized to be legible it fills half the bar and reads as an
-              avatar. The monogram keeps the one idea that survives small — the
-              teal/orange split — and the wordmark is set in the nav's own type,
-              so the lockup sits on the same line as the links rather than
-              floating above it. */}
-          <Link href="/dashboard" className="order-1 flex shrink-0 items-center gap-2.5">
-            <Monogram size={24} />
-            <span className="text-sm font-semibold tracking-tight">Face-Off</span>
-          </Link>
+    <div className="min-h-dvh lg:flex">
+      {/* ── Desktop rail ──────────────────────────────────────────────── */}
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface-1/60 px-3 py-4 lg:flex">
+        <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
+          <Monogram size={26} />
+          <span className="text-sm font-semibold tracking-tight">Face-Off</span>
+        </Link>
 
-          {/* Full width and last on a phone, so it gets a row of its own;
-              inline and second on desktop. */}
-          <nav
-            aria-label="Main"
-            className="order-3 -mx-1 flex w-full items-center gap-1 overflow-x-auto px-1 sm:order-2 sm:mx-0 sm:w-auto sm:px-0"
-          >
-            {links.map((link) => {
-              const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 rounded-control px-3 py-1.5 text-sm transition-colors duration-150 whitespace-nowrap',
-                    active
-                      ? 'bg-surface-2 text-ink'
-                      : 'text-ink-dim hover:bg-surface-2/60 hover:text-ink',
-                  )}
-                >
-                  <link.icon aria-hidden size={15} strokeWidth={1.5} className="hidden sm:block" />
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="order-2 ml-auto flex items-center gap-2 sm:order-3 sm:gap-3">
-            {user && (
-              <span className="hidden text-[13px] text-ink-faint sm:inline">{user.email}</span>
-            )}
-            <ThemeToggle />
-            <Button
-              size="sm"
-              variant="ghost"
-              loading={logout.isPending}
-              icon={<LogOut />}
-              // The label is hidden rather than removed on a phone: the button
-              // still needs an accessible name, and sr-only keeps one without
-              // spending the width.
-              onClick={() => logout.mutate(undefined, { onSettled: () => router.push('/login') })}
+        <nav aria-label="Main" className="flex flex-col gap-1">
+          {links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              aria-current={isActive(link.href) ? 'page' : undefined}
+              className={cn(
+                'flex items-center gap-2.5 rounded-control px-2.5 py-2 text-sm transition-colors',
+                isActive(link.href)
+                  ? 'bg-surface-3 text-ink'
+                  : 'text-ink-dim hover:bg-surface-2/60 hover:text-ink',
+              )}
             >
-              <span className="sr-only sm:not-sr-only">Sign out</span>
-            </Button>
+              <link.icon aria-hidden size={16} strokeWidth={1.5} />
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="mt-auto space-y-3 border-t border-line pt-3">
+          <div className="flex items-center gap-2.5 px-1">
+            <span
+              aria-hidden
+              className="grid size-8 shrink-0 place-items-center rounded-md bg-gradient-to-br from-brand to-brand-deep text-[13px] font-semibold text-white"
+            >
+              {initial}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] text-ink">{user?.email ?? '—'}</span>
+              <span className="block text-[11px] text-ink-faint">
+                {user ? (ROLE_LABEL[user.role] ?? user.role) : ''}
+              </span>
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={signOut}
+              aria-label="Sign out"
+              className="grid size-8 place-items-center rounded-control text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <LogOut aria-hidden size={16} strokeWidth={1.5} />
+            </button>
           </div>
         </div>
       </aside>
