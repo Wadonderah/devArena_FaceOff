@@ -266,7 +266,15 @@ function Problem({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-      <section className="panel hairline max-h-[calc(100dvh-9rem)] overflow-y-auto p-6 lg:sticky lg:top-20">
+      {/* The scroll container is desktop-only.
+          
+          On a phone the two panels stack, so capping the problem statement at a
+          viewport height and giving it its own scrollbar created a nested
+          scroll area: flicking inside it moved the statement, flicking just
+          outside moved the page, and reaching the editor meant scrolling
+          through the whole problem first. Stacked, it should simply be as tall
+          as it needs to be and let the page scroll. */}
+      <section className="panel hairline p-6 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl">{challenge.title}</h2>
           <span className="shrink-0 text-[13px] text-ink-faint">{challenge.points} pts</span>

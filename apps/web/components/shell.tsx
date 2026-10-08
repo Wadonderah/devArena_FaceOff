@@ -51,7 +51,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
           the shape every reference uses, and it lets the background show
           through on both sides instead of slicing the page in two. */}
       <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 rounded-panel border border-line bg-surface-0/80 px-4 backdrop-blur-xl sm:px-5">
+        {/* One row on desktop, two on a phone.
+            
+            As a single row the right-hand group and the brand consumed almost
+            the whole width at 390px, leaving the nav a sliver that scrolled
+            horizontally with no visible affordance — so an organizer could not
+            reach the console from their phone at all. Wrapping lets the links
+            take a full-width second row where they are actually tappable.
+            
+            `order` rather than duplicated markup, so each control exists once in
+            the DOM and the tab order stays sensible in both layouts. */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 rounded-panel border border-line bg-surface-0/80 px-3 py-2.5 backdrop-blur-xl sm:h-14 sm:flex-nowrap sm:gap-6 sm:px-5 sm:py-0">
           {/* The monogram, not the full logo. The logo is a detailed circular
               illustration that needs room: at nav scale it is a colour blob,
               and sized to be legible it fills half the bar and reads as an
@@ -59,12 +69,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
               teal/orange split — and the wordmark is set in the nav's own type,
               so the lockup sits on the same line as the links rather than
               floating above it. */}
-          <Link href="/dashboard" className="flex shrink-0 items-center gap-2.5">
+          <Link href="/dashboard" className="order-1 flex shrink-0 items-center gap-2.5">
             <Monogram size={24} />
             <span className="text-sm font-semibold tracking-tight">Face-Off</span>
           </Link>
 
-          <nav aria-label="Main" className="flex items-center gap-1 overflow-x-auto">
+          {/* Full width and last on a phone, so it gets a row of its own;
+              inline and second on desktop. */}
+          <nav
+            aria-label="Main"
+            className="order-3 -mx-1 flex w-full items-center gap-1 overflow-x-auto px-1 sm:order-2 sm:mx-0 sm:w-auto sm:px-0"
+          >
             {links.map((link) => {
               const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
               return (
@@ -86,7 +101,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="order-2 ml-auto flex items-center gap-2 sm:order-3 sm:gap-3">
             {user && (
               <span className="hidden text-[13px] text-ink-faint sm:inline">{user.email}</span>
             )}
@@ -96,9 +111,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
               variant="ghost"
               loading={logout.isPending}
               icon={<LogOut />}
+              // The label is hidden rather than removed on a phone: the button
+              // still needs an accessible name, and sr-only keeps one without
+              // spending the width.
               onClick={() => logout.mutate(undefined, { onSettled: () => router.push('/login') })}
             >
-              Sign out
+              <span className="sr-only sm:not-sr-only">Sign out</span>
             </Button>
           </div>
         </div>
