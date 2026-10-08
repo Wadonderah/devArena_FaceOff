@@ -3,10 +3,13 @@ import {
     ConflictException,
     ForbiddenException,
     Injectable,
+    Logger,
     NotFoundException,
 } from '@nestjs/common'
 import { CompetitionState, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationsService } from '../notifications/notifications.service'
+import { teamJoined } from '../notifications/notification-templates'
 import { generateTeamCode, normalizeTeamCode } from './team-code'
 import type { CreateTeamDto, JoinTeamDto } from './dto/team.dto'
 
@@ -35,7 +38,12 @@ const TEAM_SELECT = {
 
 @Injectable()
 export class TeamsService {
-    constructor(private readonly prisma: PrismaService) {}
+    private readonly logger = new Logger(TeamsService.name)
+
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly notifications: NotificationsService
+    ) {}
 
     async create(competitionId: string, userId: string, dto: CreateTeamDto) {
         await this.assertJoinable(competitionId, userId)
@@ -63,7 +71,7 @@ export class TeamsService {
 
         const team = await this.prisma.team.findUnique({
             where: { code },
-            select: { id: true, competitionId: true, name: true },
+            select: { id: true, competitionId: true, name: true, captainId: true },
         })
 
         if (!team) throw new NotFoundException('No team found with that code')
@@ -84,7 +92,54 @@ export class TeamsService {
             throw error
         }
 
+        // Only once the membership row exists, so the captain is never told
+        // about a join that the unique constraint then rejected.
+        await this.notifyCaptainOfJoin(team, userId)
+
         return this.findOne(team.id, userId)
+    }
+
+    /// Tells the captain that someone joined.
+    ///
+    /// Joining by code is the one team change that happens without the captain
+    /// doing anything, so it is the one they would otherwise only discover by
+    /// reloading the team page.
+    private async notifyCaptainOfJoin(
+        team: { id: string; name: string; captainId: string },
+        userId: string
+    ): Promise<void> {
+        // The captain joining their own team is not news. Unreachable through
+        // this path today, since a captain is already a member, but the guard
+        // costs nothing and the alternative is a confusing row if that changes.
+        if (team.captainId === userId) return
+
+        // Wrapped, lookup included. The join itself has already committed; a
+        // failure to look up a display name must not turn a successful join
+        // into an error response, which would leave the participant believing
+        // they are not on the team they just joined.
+        try {
+            const profile = await this.prisma.profile.findUnique({
+                where: { userId },
+                select: { displayName: true },
+            })
+
+            // Falls back to a generic phrase rather than the email address. A
+            // profile is optional, and the team payload deliberately does not
+            // carry member emails, so putting one in a notification would leak
+            // more than the page it links to shows.
+            const label = profile?.displayName ?? 'A new member'
+
+            await this.notifications.notifyUser(
+                team.captainId,
+                teamJoined(team, { id: userId, label })
+            )
+        } catch (error) {
+            this.logger.error(
+                `${userId} joined team ${team.id} but the captain was not notified: ${
+                    (error as Error).message
+                }`
+            )
+        }
     }
 
     async leave(teamId: string, userId: string) {

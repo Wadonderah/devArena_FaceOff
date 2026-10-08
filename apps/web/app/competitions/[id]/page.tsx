@@ -15,6 +15,7 @@ import { Field } from '@/components/ui/input';
 import { api, ApiError } from '@/lib/api';
 import { useCompetition, useCountdown } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
+import { registrationGate } from '@/lib/registration';
 import type { RoundSummary, Team } from '@/lib/types';
 
 function RoundCard({
@@ -313,9 +314,16 @@ function CompetitionContent({ id }: { id: string }) {
 
   if (!data) return null;
 
-  const canJoin =
-    data.joined === false &&
-    (data.state === 'REGISTRATION' || data.state === 'LIVE');
+  // The window, not just the state. A competition can sit in REGISTRATION with
+  // its window still days away, and keying the button on `state` alone offered
+  // a Join that the server then refused with "Registration has not opened yet".
+  const gate = registrationGate(data);
+  const canJoin = data.joined === false && gate.joinable;
+
+  // Shown in place of the button: say when it opens rather than leaving a
+  // participant with nothing on the page to explain why they cannot enrol.
+  const blockedReason =
+    data.joined === false && !gate.joinable && gate.reason !== 'draft' ? gate.detail : null;
 
   return (
     <>
@@ -340,6 +348,11 @@ function CompetitionContent({ id }: { id: string }) {
             <Button loading={join.isPending} onClick={() => join.mutate()}>
               Join competition
             </Button>
+          )}
+          {blockedReason && (
+            <p className="self-center rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink-dim">
+              {blockedReason}
+            </p>
           )}
         </div>
       </header>

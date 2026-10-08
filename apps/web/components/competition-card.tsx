@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight, CalendarClock, Users } from 'lucide-react';
 import { CompetitionStateBadge } from '@/components/ui/badge';
+import { registrationGate } from '@/lib/registration';
 import type { CompetitionListItem } from '@/lib/types';
 
 const DATE = new Intl.DateTimeFormat(undefined, {
@@ -20,8 +21,22 @@ const DATE = new Intl.DateTimeFormat(undefined, {
 /// registration window; all three were being thrown away.
 export function CompetitionCard({ competition }: { competition: CompetitionListItem }) {
   const { id, name, description, state, registrationClosesAt, _count } = competition;
+
+  // Which of the two dates is worth the row. If registration has not opened,
+  // that is the fact a participant needs — showing only the closing date made a
+  // competition look joinable when the window was still days away, and the
+  // Join button inside then failed. `registrationOpensAt` was already on the
+  // payload and simply unused.
+  const gate = registrationGate(competition);
   const closes = registrationClosesAt ? new Date(registrationClosesAt) : null;
   const closingSoon = closes !== null && closes.getTime() > Date.now();
+
+  const window =
+    gate.joinable === false && gate.reason === 'not-open'
+      ? gate.detail
+      : closingSoon
+        ? `Registration closes ${DATE.format(closes)}`
+        : null;
 
   return (
     <Link
@@ -47,10 +62,10 @@ export function CompetitionCard({ competition }: { competition: CompetitionListI
           </span>
         )}
 
-        {closingSoon && (
+        {window && (
           <span className="inline-flex items-center gap-1.5">
             <CalendarClock aria-hidden size={13} strokeWidth={1.5} />
-            Registration closes {DATE.format(closes)}
+            {window}
           </span>
         )}
 

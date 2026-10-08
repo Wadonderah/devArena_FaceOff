@@ -1,7 +1,17 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma, RoundState } from '@prisma/client';
+import { Prisma, RoundState, RoundType } from '@prisma/client';
 import { RoundsService } from './rounds.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { NotificationsService } from '../notifications/notifications.service';
+
+/// RoundsService now fans out ROUND_STARTED / ROUND_ENDED on transition. None
+/// of the tests below exercise `transition`, so a stub that records calls is
+/// enough — and it keeps the one assertion that matters available: that the
+/// paths under test never notify anyone.
+const makeService = (prisma: PrismaService) =>
+  new RoundsService(prisma, {
+    notifyCompetition: jest.fn().mockResolvedValue(0),
+  } as unknown as NotificationsService);
 
 function makePrisma(stored: { id: string; state: RoundState } | null) {
   const round = {
@@ -17,7 +27,7 @@ describe('RoundsService.remove', () => {
   it.each([RoundState.DRAFT, RoundState.SCHEDULED])('deletes a round in %s', async (state) => {
     const { prisma, round } = makePrisma({ id: 'r1', state });
 
-    await new RoundsService(prisma).remove('r1');
+    await makeService(prisma).remove('r1');
 
     expect(round.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
   });
@@ -25,7 +35,7 @@ describe('RoundsService.remove', () => {
   it('rejects an unknown round', async () => {
     const { prisma, round } = makePrisma(null);
 
-    await expect(new RoundsService(prisma).remove('nope')).rejects.toBeInstanceOf(
+    await expect(makeService(prisma).remove('nope')).rejects.toBeInstanceOf(
       NotFoundException,
     );
     expect(round.delete).not.toHaveBeenCalled();
@@ -42,7 +52,7 @@ describe('RoundsService.remove', () => {
     RoundState.ARCHIVED,
   ])('refuses to delete a round in %s and suggests archiving', async (state) => {
     const { prisma, round } = makePrisma({ id: 'r1', state });
-    const service = new RoundsService(prisma);
+    const service = makeService(prisma);
 
     await expect(service.remove('r1')).rejects.toBeInstanceOf(ConflictException);
     await expect(service.remove('r1')).rejects.toThrow(/Archive it instead/);
@@ -130,7 +140,7 @@ describe('RoundsService.setWeight', () => {
       ],
     });
 
-    await new RoundsService(prisma).setWeight('r1', 0.4);
+    await makeService(prisma).setWeight('r1', 0.4);
 
     // 20/40 * 0.4 = 0.2 each...
     expect(Number(updated[0].data.weightedScore)).toBeCloseTo(0.2, 6);
@@ -154,7 +164,7 @@ describe('RoundsService.setWeight', () => {
       ],
     });
 
-    await new RoundsService(prisma).setWeight('r1', 0.5);
+    await makeService(prisma).setWeight('r1', 0.5);
 
     const total = updated.reduce((sum, u) => sum + Number(u.data.weightedScore), 0);
     expect(total).toBeCloseTo(0.5, 6);
@@ -172,7 +182,7 @@ describe('RoundsService.setWeight', () => {
       ],
     });
 
-    await new RoundsService(prisma).setWeight('r1', 0.3);
+    await makeService(prisma).setWeight('r1', 0.3);
 
     expect(updated).toHaveLength(2);
     // 10/20 * 0.3 = 0.15
@@ -197,7 +207,7 @@ describe('RoundsService.setWeight', () => {
       events: [{ id: 'e1', rawScore: 5, maxRawScore: 10 }],
     });
 
-    await new RoundsService(prisma).setWeight('r1', 0.3);
+    await makeService(prisma).setWeight('r1', 0.3);
 
     expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalledTimes(1);
   });
@@ -210,7 +220,7 @@ describe('RoundsService.setWeight', () => {
     });
 
     // 0.4 sibling + 0.7 requested = 1.1
-    await expect(new RoundsService(prisma).setWeight('r1', 0.7)).rejects.toBeInstanceOf(
+    await expect(makeService(prisma).setWeight('r1', 0.7)).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });
@@ -222,7 +232,7 @@ describe('RoundsService.setWeight', () => {
       siblingWeights: [0.4],
     });
 
-    await expect(new RoundsService(prisma).setWeight('r1', 0.7)).rejects.toThrow(
+    await expect(makeService(prisma).setWeight('r1', 0.7)).rejects.toThrow(
       /leaving 0\.6000/,
     );
   });
@@ -234,7 +244,7 @@ describe('RoundsService.setWeight', () => {
     async (state) => {
       const { prisma, tx } = makeWeightPrisma({ state, weight: 0.4, siblingWeights: [0.6] });
 
-      await expect(new RoundsService(prisma).setWeight('r1', 0.2)).rejects.toBeInstanceOf(
+      await expect(makeService(prisma).setWeight('r1', 0.2)).rejects.toBeInstanceOf(
         ConflictException,
       );
       expect(tx.round.update).not.toHaveBeenCalled();
@@ -246,9 +256,137 @@ describe('RoundsService.setWeight', () => {
     async (state) => {
       const { prisma, tx } = makeWeightPrisma({ state, weight: 0.4, siblingWeights: [0.2] });
 
-      await new RoundsService(prisma).setWeight('r1', 0.3);
+      await makeService(prisma).setWeight('r1', 0.3);
 
       expect(tx.round.update).toHaveBeenCalled();
     },
   );
+});
+
+/// Round transitions are the only fan-out that reaches every participant at
+/// once, and the only one triggered by a human pressing a button mid-event.
+describe('RoundsService.transition — participant notifications', () => {
+  const round = {
+    id: 'r1',
+    name: 'Bug Hunt',
+    type: RoundType.DEBUGGING,
+    competitionId: 'c1',
+    // Widened, so an override can supply any state. Left as the literal it
+    // would otherwise infer, every test below could only ever pass SCHEDULED.
+    state: RoundState.SCHEDULED as RoundState,
+    startsAt: null,
+    endsAt: null,
+  };
+
+  function build(stored: Partial<typeof round> = {}) {
+    const notifications = {
+      notifyCompetition: jest.fn().mockResolvedValue(2),
+    } as unknown as NotificationsService;
+
+    const prisma = {
+      round: {
+        findUnique: jest.fn().mockResolvedValue({ ...round, ...stored }),
+        update: jest.fn().mockResolvedValue({ ...round, ...stored }),
+      },
+      roundChallenge: { count: jest.fn().mockResolvedValue(3) },
+      competition: { findUnique: jest.fn().mockResolvedValue({ name: 'Season 1' }) },
+    } as unknown as PrismaService;
+
+    return { service: new RoundsService(prisma, notifications), prisma, notifications };
+  }
+
+  it('announces a round that goes live, naming the competition', async () => {
+    const { service, notifications } = build();
+
+    await service.transition('r1', RoundState.LIVE);
+
+    expect(notifications.notifyCompetition).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        type: 'ROUND_STARTED',
+        title: 'Bug Hunt is open',
+        linkUrl: '/rounds/r1/debugging',
+        dedupeKey: 'round:r1:started',
+      }),
+    );
+  });
+
+  it('announces a round that completes, pointing at the standings', async () => {
+    const { service, notifications } = build({ state: RoundState.LIVE });
+
+    await service.transition('r1', RoundState.COMPLETED);
+
+    expect(notifications.notifyCompetition).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        type: 'ROUND_ENDED',
+        linkUrl: '/leaderboard/c1',
+        dedupeKey: 'round:r1:ended',
+      }),
+    );
+  });
+
+  // Pausing is not an ending. A fire alarm or a failing projector is why PAUSED
+  // exists, and telling fifty people the round is over when it is about to
+  // resume would be worse than saying nothing.
+  it('says nothing when a round is paused', async () => {
+    const { service, notifications } = build({ state: RoundState.LIVE });
+
+    await service.transition('r1', RoundState.PAUSED);
+
+    expect(notifications.notifyCompetition).not.toHaveBeenCalled();
+  });
+
+  // Both are bookkeeping that happen after participants were already told the
+  // round closed. FINALIZED in particular is reachable twice, because an
+  // organizer may unlock to correct a score and finalize again.
+  it.each([RoundState.FINALIZED, RoundState.ARCHIVED])(
+    'says nothing when a round moves to %s',
+    async (to) => {
+      const { service, notifications } = build({ state: RoundState.COMPLETED });
+
+      await service.transition('r1', to);
+
+      expect(notifications.notifyCompetition).not.toHaveBeenCalled();
+    },
+  );
+
+  // The transition is the organizer's instruction; the notification is a side
+  // effect of it. If the fan-out could fail the transition, an unrelated
+  // database blip would stop a round being started at all.
+  it('starts the round even when the fan-out throws', async () => {
+    const { service, prisma, notifications } = build();
+    (notifications.notifyCompetition as jest.Mock).mockRejectedValue(new Error('db down'));
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(service.transition('r1', RoundState.LIVE)).resolves.toBeTruthy();
+    expect(prisma.round.update).toHaveBeenCalled();
+
+    jest.restoreAllMocks();
+  });
+
+  // Same reasoning, one layer earlier: the competition name is read here,
+  // outside the notification service's own guard.
+  it('starts the round even when the competition lookup throws', async () => {
+    const { service, prisma } = build();
+    (prisma.competition.findUnique as jest.Mock).mockRejectedValue(new Error('db down'));
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(service.transition('r1', RoundState.LIVE)).resolves.toBeTruthy();
+    expect(prisma.round.update).toHaveBeenCalled();
+
+    jest.restoreAllMocks();
+  });
+
+  // Nothing was written, so nobody should be told. The guard that blocks an
+  // empty round from starting runs before the update.
+  it('does not announce a transition it refused', async () => {
+    const { service, notifications, prisma } = build();
+    (prisma.roundChallenge.count as jest.Mock).mockResolvedValue(0);
+
+    await expect(service.transition('r1', RoundState.LIVE)).rejects.toThrow(
+      /at least one challenge/i,
+    );
+    expect(notifications.notifyCompetition).not.toHaveBeenCalled();
+  });
 });

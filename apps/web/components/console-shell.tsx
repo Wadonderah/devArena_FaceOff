@@ -21,6 +21,7 @@ const CONSOLE_NAV = [
   { href: '/admin', label: 'Console' },
   { href: '/admin/challenges', label: 'Library' },
   { href: '/admin/challenges/import', label: 'Import' },
+  { href: '/admin/announcements', label: 'Announce' },
 ];
 
 /// Longest matching prefix wins.

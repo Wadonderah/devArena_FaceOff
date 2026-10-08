@@ -277,3 +277,44 @@ export interface Overview {
   failedSubmissions: number;
   liveRounds: number;
 }
+
+/// Mirrors NotificationType in the Prisma schema.
+///
+/// The last three are declared but not emitted yet — the team join-request
+/// flow lands next. They are here so the union does not have to change again.
+export type NotificationType =
+  | 'ANNOUNCEMENT'
+  /// Sent to every account, not to a competition's participants — when it
+  /// fires there are none, which is the point of it.
+  | 'COMPETITION_OPEN'
+  | 'TEAM_JOINED'
+  | 'ROUND_STARTED'
+  | 'ROUND_ENDED'
+  | 'GRADING_ALERT'
+  | 'TEAM_JOIN_REQUEST'
+  | 'TEAM_REQUEST_APPROVED'
+  | 'TEAM_REQUEST_DECLINED';
+
+/// Named `AppNotification` rather than `Notification`: the latter is a DOM
+/// global, and shadowing it would make every `Notification` in a component file
+/// ambiguous to a reader even where TypeScript resolves it correctly.
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  /// App-relative, or null for a row that is not clickable. Still passed
+  /// through `safeNotificationLink` before it is followed.
+  linkUrl: string | null;
+  metadata: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/// Shape of GET /notifications.
+export interface NotificationPage {
+  items: AppNotification[];
+  unreadCount: number;
+  /// Pass back as `?before=` for the next page. Null means this was the last.
+  nextCursor: string | null;
+}

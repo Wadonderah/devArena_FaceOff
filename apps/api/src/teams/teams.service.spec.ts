@@ -7,11 +7,13 @@ import {
 import { CompetitionState, Prisma } from '@prisma/client';
 import { TeamsService } from './teams.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { NotificationsService } from '../notifications/notifications.service';
 
 const COMPETITION = { id: 'comp-1', state: CompetitionState.REGISTRATION, maxTeamSize: null };
 
 interface Overrides {
   competition?: unknown;
+  profile?: unknown;
   enrolled?: unknown;
   existingMembership?: unknown;
   team?: unknown;
@@ -37,6 +39,13 @@ function build(over: Overrides = {}) {
         .fn()
         .mockResolvedValue('enrolled' in over ? over.enrolled : { id: 'cp-1' }),
     },
+    // Read by the join hook to name the new member in the captain's
+    // notification. Absent is a valid state — a profile is optional.
+    profile: {
+      findUnique: jest
+        .fn()
+        .mockResolvedValue('profile' in over ? over.profile : { displayName: 'Ada Lovelace' }),
+    },
     teamMember: {
       findUnique: jest
         .fn()
@@ -59,8 +68,15 @@ function build(over: Overrides = {}) {
     },
   } as unknown as PrismaService;
 
+  // Joining by code now notifies the captain. Stubbed rather than mocked at the
+  // Prisma layer so a test can assert who was told, not just that a row moved.
+  const notifications = {
+    notifyUser: jest.fn().mockResolvedValue(1),
+  } as unknown as NotificationsService;
+
   return {
-    service: new TeamsService(prisma),
+    service: new TeamsService(prisma, notifications),
+    notifications,
     prisma,
     teamCreate,
     memberCreate,
@@ -392,5 +408,85 @@ describe('TeamsService — membership is locked while the competition is live', 
     const { service, teamUpdate } = build({ team: liveTeam, membership: { id: 'tm-2' } });
     await service.transferCaptaincy('team-1', 'user-1', 'user-2');
     expect(teamUpdate).toHaveBeenCalled();
+  });
+});
+
+/// Joining by code is the one team change that happens without the captain
+/// doing anything, so it is the only one they would otherwise discover solely
+/// by reloading the page.
+describe('TeamsService.joinByCode — captain notification', () => {
+  const team = {
+    id: 'team-1',
+    competitionId: 'comp-1',
+    name: 'Phoenix',
+    captainId: 'captain-1',
+    members: [],
+  };
+
+  it('tells the captain who joined', async () => {
+    const { service, prisma, notifications } = build({ team });
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(team);
+
+    await service.joinByCode('user-2', { code: 'ABC234' });
+
+    expect(notifications.notifyUser).toHaveBeenCalledWith(
+      'captain-1',
+      expect.objectContaining({
+        type: 'TEAM_JOINED',
+        title: 'Ada Lovelace joined Phoenix',
+        linkUrl: '/teams/team-1',
+      }),
+    );
+  });
+
+  // A profile is optional. Falling back to the email address would put it in
+  // front of the captain, and the team page they are being linked to does not
+  // show member emails — the notification would leak more than its own target.
+  it('falls back to a generic label rather than an email when there is no profile', async () => {
+    const { service, prisma, notifications } = build({ team, profile: null });
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(team);
+
+    await service.joinByCode('user-2', { code: 'ABC234' });
+
+    expect(notifications.notifyUser).toHaveBeenCalledWith(
+      'captain-1',
+      expect.objectContaining({ title: 'A new member joined Phoenix' }),
+    );
+  });
+
+  it('does not notify a captain who is joining their own team', async () => {
+    const { service, prisma, notifications } = build({ team });
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(team);
+
+    await service.joinByCode('captain-1', { code: 'ABC234' });
+
+    expect(notifications.notifyUser).not.toHaveBeenCalled();
+  });
+
+  // The membership row has already committed by this point. Surfacing a
+  // notification failure as an error would tell the participant their join
+  // failed when in fact they are on the team.
+  it('still reports a successful join when the notification fails', async () => {
+    const { service, prisma, notifications, memberCreate } = build({ team });
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(team);
+    (notifications.notifyUser as jest.Mock).mockRejectedValue(new Error('db down'));
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(service.joinByCode('user-2', { code: 'ABC234' })).resolves.toBeTruthy();
+    expect(memberCreate).toHaveBeenCalled();
+
+    jest.restoreAllMocks();
+  });
+
+  // Nothing committed, so nobody should be told.
+  it('does not notify when the join itself was rejected', async () => {
+    const { service, notifications } = build({
+      team,
+      competition: { ...COMPETITION, maxTeamSize: 3 },
+      memberCount: 3,
+    });
+
+    await expect(service.joinByCode('user-2', { code: 'ABC234' })).rejects.toThrow(/full/i);
+    expect(notifications.notifyUser).not.toHaveBeenCalled();
   });
 });
