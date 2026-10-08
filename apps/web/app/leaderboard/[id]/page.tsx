@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { useCurrentUser, useLeaderboard } from '@/lib/hooks';
 import type { LeaderboardRow, TeamLeaderboard } from '@/lib/types';
 import { cn } from '@/lib/cn';
+import { formatScore } from '@/lib/score-format';
 
 function formatTime(ms: number): string {
   if (ms <= 0) return '—';
@@ -57,11 +58,15 @@ function TeamBoard({ competitionId }: { competitionId: string }) {
 
   return (
     <div className="panel hairline overflow-hidden">
-      <div className="grid grid-cols-[3rem_1fr_5rem_5.5rem_6rem] gap-3 border-b border-line px-4 py-2.5 text-[11px] uppercase tracking-[0.08em] text-ink-faint sm:px-5">
+      {/* The columns were all fixed widths — 19.5rem of them plus gaps and
+          padding, about 392px, which overflowed a 390px phone. Members and
+          Solved are the two a participant can do without on a narrow screen, so
+          they drop out and the rest get the room. */}
+      <div className="grid grid-cols-[2.25rem_1fr_auto] gap-3 border-b border-line px-4 py-2.5 text-[11px] uppercase tracking-[0.08em] text-ink-faint sm:grid-cols-[3rem_1fr_4rem_4rem_auto] sm:px-5">
         <span>Rank</span>
         <span>Team</span>
-        <span className="text-right">Members</span>
-        <span className="text-right">Solved</span>
+        <span className="hidden text-right sm:block">Members</span>
+        <span className="hidden text-right sm:block">Solved</span>
         <span className="text-right">Score</span>
       </div>
 
@@ -69,7 +74,7 @@ function TeamBoard({ competitionId }: { competitionId: string }) {
         {data.rows.map((row) => (
           <li
             key={row.teamId}
-            className="grid grid-cols-[3rem_1fr_5rem_5.5rem_6rem] items-center gap-3 border-b border-line/60 px-4 py-3 last:border-0 sm:px-5"
+            className="grid grid-cols-[2.25rem_1fr_auto] items-center gap-3 border-b border-line/60 px-4 py-3 last:border-0 sm:grid-cols-[3rem_1fr_4rem_4rem_auto] sm:px-5"
           >
             <span
               className={cn(
@@ -87,12 +92,17 @@ function TeamBoard({ competitionId }: { competitionId: string }) {
                 {formatTime(row.totalTimeMs)}
               </span>
             </span>
-            <span className="tabular text-right text-[15px] text-ink-dim">{row.memberCount}</span>
-            <span className="tabular text-right text-[15px] text-ink-dim">
+            <span className="tabular hidden text-right text-[15px] text-ink-dim sm:block">
+              {row.memberCount}
+            </span>
+            <span className="tabular hidden text-right text-[15px] text-ink-dim sm:block">
               {row.completedChallenges}
             </span>
-            <span className="tabular text-right font-mono text-[15px]">
-              {row.finalScore.toFixed(4)}
+            {/* A percentage, not the raw 0.4000 fraction. Same family as the
+                rest of the row rather than font-mono, which made the one number
+                on the line look like it belonged to a different design. */}
+            <span className="tabular text-right text-[15px] font-medium">
+              {formatScore(row.finalScore)}
             </span>
           </li>
         ))}
@@ -181,11 +191,13 @@ function Board({ competitionId }: { competitionId: string }) {
       </p>
 
       <div className={cn('panel hairline overflow-hidden', view === 'teams' && 'hidden')}>
-        <div className="grid grid-cols-[3rem_1fr_4rem_5.5rem_6rem] gap-3 border-b border-line px-4 py-2.5 text-[11px] uppercase tracking-[0.08em] text-ink-faint sm:px-5">
+        {/* Same fix as the team board: Move and Solved step aside on a phone
+            rather than pushing the row past the viewport. */}
+        <div className="grid grid-cols-[2.25rem_1fr_auto] gap-3 border-b border-line px-4 py-2.5 text-[11px] uppercase tracking-[0.08em] text-ink-faint sm:grid-cols-[3rem_1fr_3.5rem_4rem_auto] sm:px-5">
           <span>Rank</span>
           <span>Participant</span>
-          <span className="text-right">Move</span>
-          <span className="text-right">Solved</span>
+          <span className="hidden text-right sm:block">Move</span>
+          <span className="hidden text-right sm:block">Solved</span>
           <span className="text-right">Score</span>
         </div>
 
@@ -205,7 +217,7 @@ function Board({ competitionId }: { competitionId: string }) {
                     layout={reduceMotion ? false : 'position'}
                     transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                     className={cn(
-                      'grid grid-cols-[3rem_1fr_4rem_5.5rem_6rem] items-center gap-3 border-b border-line/60 px-4 py-3 last:border-0 sm:px-5',
+                      'grid grid-cols-[2.25rem_1fr_auto] items-center gap-3 border-b border-line/60 px-4 py-3 last:border-0 sm:grid-cols-[3rem_1fr_3.5rem_4rem_auto] sm:px-5',
                       isMe && 'bg-brand/[0.07]',
                     )}
                   >
@@ -232,16 +244,16 @@ function Board({ competitionId }: { competitionId: string }) {
                       </span>
                     </span>
 
-                    <span className="text-right">
+                    <span className="hidden text-right sm:block">
                       <RankDelta delta={deltas.current.get(row.userId)} />
                     </span>
 
-                    <span className="tabular text-right text-[15px] text-ink-dim">
+                    <span className="tabular hidden text-right text-[15px] text-ink-dim sm:block">
                       {row.completedChallenges}
                     </span>
 
-                    <span className="tabular text-right font-mono text-[15px]">
-                      {row.finalScore.toFixed(4)}
+                    <span className="tabular text-right text-[15px] font-medium">
+                      {formatScore(row.finalScore)}
                     </span>
                   </motion.li>
                 );

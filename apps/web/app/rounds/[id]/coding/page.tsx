@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/toast';
 import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
 import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
+import { RoundClosed, RoundExitLinks, isRoundClosed } from '@/components/round-exit';
 import { GradingFailed } from '@/components/grading-failed';
 import type { Challenge, Language, RunResult } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -426,7 +427,11 @@ function CodingRound({ roundId }: { roundId: string }) {
         )}
       </header>
 
-      <RoundRules round={round} />
+      {isRoundClosed(round.state) ? (
+        <RoundClosed competitionId={round.competitionId} state={round.state} />
+      ) : (
+        <>
+          <RoundRules round={round} />
 
       {ids && ids.challengeIds.length > 1 && (
         <nav aria-label="Problems" className="mb-5 flex flex-wrap gap-2">
@@ -457,6 +462,10 @@ function CodingRound({ roundId }: { roundId: string }) {
           languages={round.allowedLanguages.length > 0 ? round.allowedLanguages : ['PYTHON']}
         />
       )}
+        </>
+      )}
+
+      <RoundExitLinks competitionId={round.competitionId} />
     </>
   );
 }

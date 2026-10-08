@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/toast';
 import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
 import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
+import { RoundClosed, RoundExitLinks, isRoundClosed } from '@/components/round-exit';
 import { GradingFailed } from '@/components/grading-failed';
 import { LANGUAGE_LABELS } from '@/lib/taxonomy';
 import type { Challenge, Language, RunResult } from '@/lib/types';
@@ -213,8 +214,13 @@ function DebuggingWorkspace({
   const contextFiles = Object.entries(bug.contextFiles ?? {});
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <section className="max-h-[calc(100dvh-9rem)] space-y-4 overflow-y-auto lg:sticky lg:top-20">
+    <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      {/* Desktop-only scroll container, matching the coding round.
+          
+          Stacked on a phone this created a nested scroll area: flicking inside
+          moved the bug report, flicking just outside moved the page, and
+          reaching the editor meant scrolling the whole report first. */}
+      <section className="min-w-0 space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
         <div className="panel hairline bracketed p-5">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-live">
             Bug report
@@ -427,7 +433,11 @@ function DebuggingRound({ roundId }: { roundId: string }) {
         )}
       </header>
 
-      <RoundRules round={round} />
+      {isRoundClosed(round.state) ? (
+        <RoundClosed competitionId={round.competitionId} state={round.state} />
+      ) : (
+        <>
+          <RoundRules round={round} />
 
       {ids && ids.challengeIds.length > 1 && (
         <nav aria-label="Bugs" className="mb-5 flex flex-wrap gap-2">
@@ -458,6 +468,10 @@ function DebuggingRound({ roundId }: { roundId: string }) {
           languages={round.allowedLanguages.length > 0 ? round.allowedLanguages : ['PYTHON']}
         />
       )}
+        </>
+      )}
+
+      <RoundExitLinks competitionId={round.competitionId} />
     </>
   );
 }
