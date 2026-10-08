@@ -58,6 +58,8 @@ function makeWeightPrisma(opts: {
   weight: number;
   siblingWeights: number[];
   events?: { id: string; rawScore: number; maxRawScore: number }[];
+  /// Points per challenge in the round. The SUM is the denominator.
+  challengePoints?: number[];
 }) {
   type Captured = { where: { id: string }; data: { roundWeight: unknown; weightedScore: unknown } };
   const updated: Captured[] = [];
@@ -92,6 +94,14 @@ function makeWeightPrisma(opts: {
       }),
       findMany: jest.fn().mockResolvedValue(opts.siblingWeights.map((w) => ({ weight: dec(w) }))),
     },
+    // The round's challenges, whose points sum to the denominator.
+    roundChallenge: {
+      findMany: jest
+        .fn()
+        .mockResolvedValue(
+          (opts.challengePoints ?? [20]).map((points) => ({ challenge: { points } })),
+        ),
+    },
     $transaction: jest.fn().mockImplementation((fn: (t: unknown) => unknown) => fn(tx)),
   } as unknown as PrismaService;
 
@@ -99,6 +109,57 @@ function makeWeightPrisma(opts: {
 }
 
 describe('RoundsService.setWeight', () => {
+  // Regression. A round's weight is its share of the whole competition, so the
+  // events in it must sum to exactly that weight and never more.
+  //
+  // The first version of this method reused each row's `maxRawScore` as the
+  // denominator. That field is the CHALLENGE's maximum, not the round's, so with
+  // two 20-point challenges in one round every event was divided by 20 instead
+  // of 40 and scored double. A 0.4-weight round contributed 0.8 to the final
+  // standings. The original tests all used a single challenge, where the two
+  // numbers coincide — which is precisely why they passed.
+  it('divides by the round total, not the challenge total', async () => {
+    const { prisma, updated } = makeWeightPrisma({
+      state: RoundState.LIVE,
+      weight: 0.6,
+      siblingWeights: [],
+      challengePoints: [20, 20], // round max = 40
+      events: [
+        { id: 'e1', rawScore: 20, maxRawScore: 20 },
+        { id: 'e2', rawScore: 20, maxRawScore: 20 },
+      ],
+    });
+
+    await new RoundsService(prisma).setWeight('r1', 0.4);
+
+    // 20/40 * 0.4 = 0.2 each...
+    expect(Number(updated[0].data.weightedScore)).toBeCloseTo(0.2, 6);
+    expect(Number(updated[1].data.weightedScore)).toBeCloseTo(0.2, 6);
+
+    // ...so the round contributes exactly its weight, not twice it.
+    const total = updated.reduce((sum, u) => sum + Number(u.data.weightedScore), 0);
+    expect(total).toBeCloseTo(0.4, 6);
+  });
+
+  it('never lets a round contribute more than its weight, whatever the split', async () => {
+    const { prisma, updated } = makeWeightPrisma({
+      state: RoundState.LIVE,
+      weight: 0.5,
+      siblingWeights: [],
+      challengePoints: [10, 30, 60], // round max = 100
+      events: [
+        { id: 'e1', rawScore: 10, maxRawScore: 10 },
+        { id: 'e2', rawScore: 30, maxRawScore: 30 },
+        { id: 'e3', rawScore: 60, maxRawScore: 60 },
+      ],
+    });
+
+    await new RoundsService(prisma).setWeight('r1', 0.5);
+
+    const total = updated.reduce((sum, u) => sum + Number(u.data.weightedScore), 0);
+    expect(total).toBeCloseTo(0.5, 6);
+  });
+
   it('rewrites every recorded score so the leaderboard stays consistent', async () => {
     // weightedScore = rawScore / maxRawScore * weight
     const { prisma, tx, updated } = makeWeightPrisma({

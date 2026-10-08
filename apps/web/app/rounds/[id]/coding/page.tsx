@@ -266,7 +266,7 @@ function Problem({
   const error = run.error ?? submit.error;
 
   return (
-    <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
       {/* The scroll container is desktop-only.
           
           On a phone the two panels stack, so capping the problem statement at a
@@ -275,7 +275,7 @@ function Problem({
           outside moved the page, and reaching the editor meant scrolling
           through the whole problem first. Stacked, it should simply be as tall
           as it needs to be and let the page scroll. */}
-      <section className="panel hairline min-w-0 p-6 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
+      <section className="panel hairline p-6 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl">{challenge.title}</h2>
           <span className="shrink-0 text-[13px] text-ink-faint">{challenge.points} pts</span>

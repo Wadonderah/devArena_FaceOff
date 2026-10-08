@@ -152,10 +152,26 @@ export class RoundsService {
 
         await this.assertWeightBudget(round.competitionId, roundId, weight)
 
+        // The denominator is the ROUND's total available points, not the
+        // challenge's own.
+        //
+        // This is the whole reason weighted scores are additive: dividing by the
+        // round total means summing every event in a round yields exactly
+        // (roundRaw / roundMax) x weight, so a round can never contribute more
+        // than its weight. An earlier version of this method reused each row's
+        // `maxRawScore` — which is the CHALLENGE's maximum — and inflated every
+        // score by (roundMax / challengeMax). With two 20-point challenges in a
+        // 0.4-weight round, each event scored 0.4 and the round contributed 0.8.
+        const links = await this.prisma.roundChallenge.findMany({
+            where: { roundId },
+            select: { challenge: { select: { points: true } } },
+        })
+        const roundMaxPoints = links.reduce((sum, l) => sum + l.challenge.points, 0)
+
         return this.prisma.$transaction(async (tx) => {
             const events = await tx.scoreEvent.findMany({
                 where: { roundId },
-                select: { id: true, rawScore: true, maxRawScore: true },
+                select: { id: true, rawScore: true },
             })
 
             for (const event of events) {
@@ -166,7 +182,7 @@ export class RoundsService {
                         weightedScore: new Prisma.Decimal(
                             weightedContribution(
                                 event.rawScore.toNumber(),
-                                event.maxRawScore.toNumber(),
+                                roundMaxPoints,
                                 weight
                             )
                         ),
