@@ -8,8 +8,9 @@ import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { TeamCard } from '@/components/team-card';
 import { VerifyBanner } from '@/components/verify-banner';
+import { ProfileHeader } from '@/components/profile-header';
 import { CompetitionCard, CompetitionRow } from '@/components/competition-card';
-import { useCompetitions, useProfile } from '@/lib/hooks';
+import { useCompetitions } from '@/lib/hooks';
 import { useCompetition } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
 import { ArrowRight, CalendarClock, LayoutList, Radio, Trophy } from 'lucide-react';
@@ -128,7 +129,6 @@ function Section({
 }
 
 function DashboardContent() {
-  const { data: profile } = useProfile();
   const { data: competitions, isLoading } = useCompetitions();
 
   const grouped = groupByState(competitions ?? []);
@@ -147,17 +147,12 @@ function DashboardContent() {
     <>
       <VerifyBanner />
 
-      <header className="mb-2">
-        <h1 className="text-3xl">
-          {profile?.profile?.displayName
-            ? `Welcome back, ${profile.profile.displayName.split(' ')[0]}`
-            : 'Dashboard'}
-        </h1>
-        <p className="mt-1.5 max-w-prose text-[15px] leading-relaxed text-ink-dim">
-          Everything you can take part in right now. A competition runs in timed rounds: answer
-          multiple-choice questions, write code against hidden tests, then fix a broken program.
-        </p>
-      </header>
+      <ProfileHeader />
+
+      <p className="mb-2 max-w-prose text-[15px] leading-relaxed text-ink-dim">
+        Everything you can take part in right now. A competition runs in timed rounds: answer
+        multiple-choice questions, write code against hidden tests, then fix a broken program.
+      </p>
 
       {isLoading ? (
         <div className="mt-8">

@@ -13,6 +13,7 @@ import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
 import { useCountdown, useMcqProgress, useRound } from '@/lib/hooks';
 import { RoundRules } from '@/components/round-rules';
+import { RoundClosed, isRoundClosed } from '@/components/round-exit';
 import type { Challenge, McqSubmitResponse } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -271,6 +272,15 @@ function McqRound({ roundId }: { roundId: string }) {
       </header>
 
       <RoundRules round={round} />
+
+      {/* The round ending is a different thing from finishing every question,
+          and only the second was handled. Someone whose round was ended by the
+          organizer mid-way saw no change but a badge. */}
+      {isRoundClosed(round.state) && (
+        <div className="mb-6">
+          <RoundClosed competitionId={round.competitionId} state={round.state} />
+        </div>
+      )}
 
       {progress && progress.totalQuestions > 0 &&
         progress.answeredCount >= progress.totalQuestions && (
