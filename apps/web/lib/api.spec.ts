@@ -25,7 +25,12 @@ function makeFetch(opts: { unauthorizedCalls?: number; refreshOk?: boolean } = {
     calls.push(url);
 
     if (url.includes('/auth/refresh')) {
-      return { ok: refreshOk, status: refreshOk ? 200 : 401, json: async () => ({}) } as Response;
+      return {
+        ok: refreshOk,
+        status: refreshOk ? 200 : 401,
+        headers: new Headers(),
+        json: async () => ({}),
+      } as Response;
     }
 
     if (unauthorized > 0) {
@@ -33,11 +38,17 @@ function makeFetch(opts: { unauthorizedCalls?: number; refreshOk?: boolean } = {
       return {
         ok: false,
         status: 401,
+        headers: new Headers(),
         json: async () => ({ statusCode: 401, code: 'UNAUTHORIZED', message: 'Invalid session' }),
       } as Response;
     }
 
-    return { ok: true, status: 200, json: async () => ({ user: { id: 'u1' } }) } as Response;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => ({ user: { id: 'u1' } }),
+    } as Response;
   });
 
   return { fetchMock, calls };
@@ -131,6 +142,60 @@ describe('api()', () => {
   });
 });
 
+describe('api() rate limiting', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  const rateLimited = (retryAfter?: string) =>
+    jest.fn(async () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers(retryAfter ? { 'Retry-After': retryAfter } : {}),
+      json: async () => ({
+        statusCode: 429,
+        code: 'RATE_LIMITED',
+        message: 'Too many requests. Wait a few seconds and try again.',
+      }),
+    })) as unknown as typeof fetch;
+
+  // The header is the server's own answer; reading it is what lets the UI say
+  // "try again in 8 seconds" instead of guessing.
+  it('carries Retry-After from the response onto the error', async () => {
+    jest.spyOn(global, 'fetch').mockImplementation(rateLimited('8'));
+
+    await expect(api('/submissions/code/run', { method: 'POST' })).rejects.toMatchObject({
+      status: 429,
+      code: 'RATE_LIMITED',
+      retryAfterSeconds: 8,
+    });
+  });
+
+  it('leaves it undefined when the server sends none', async () => {
+    jest.spyOn(global, 'fetch').mockImplementation(rateLimited());
+
+    await expect(api('/submissions/code/run', { method: 'POST' })).rejects.toMatchObject({
+      retryAfterSeconds: undefined,
+    });
+  });
+
+  // A malformed header must not become NaN seconds in the interface.
+  it.each(['soon', '0', '-5'])('ignores a nonsense Retry-After of %p', async (bad) => {
+    jest.spyOn(global, 'fetch').mockImplementation(rateLimited(bad));
+
+    await expect(api('/submissions/code/run', { method: 'POST' })).rejects.toMatchObject({
+      retryAfterSeconds: undefined,
+    });
+  });
+
+  // A 429 is not a stale session, so it must not burn a refresh.
+  it('does not attempt a token refresh', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockImplementation(rateLimited('3'));
+
+    await expect(api('/submissions/code/run', { method: 'POST' })).rejects.toBeInstanceOf(ApiError);
+
+    expect(spy.mock.calls.filter(([u]) => String(u).includes('/auth/refresh'))).toHaveLength(0);
+  });
+});
+
 describe('describeError', () => {
   it('turns a rate limit into something a participant can act on', () => {
     const err = new ApiError(429, 'RATE_LIMITED', 'ThrottlerException: Too Many Requests');
@@ -139,6 +204,27 @@ describe('describeError', () => {
 
     expect(rateLimited).toBe(true);
     expect(`${title} ${detail}`).not.toMatch(/Throttler|Exception/);
+  });
+
+  // Retry-After is the server saying exactly how long to wait. Guessing would
+  // either nag the API or make the participant wait longer than they need to.
+  it('uses the server retry time when it sends one', () => {
+    const err = new ApiError(429, 'RATE_LIMITED', 'Too many requests.', undefined, 12);
+
+    expect(describeError(err).detail).toBe('Try again in 12 seconds.');
+    expect(describeError(err).retryAfterSeconds).toBe(12);
+  });
+
+  it('says a second, not 1 seconds', () => {
+    const err = new ApiError(429, 'RATE_LIMITED', 'Too many requests.', undefined, 1);
+
+    expect(describeError(err).detail).toBe('Try again in 1 second.');
+  });
+
+  it('falls back to vague wording when no retry time is given', () => {
+    const err = new ApiError(429, 'RATE_LIMITED', 'Too many requests.');
+
+    expect(describeError(err).detail).toMatch(/few seconds/);
   });
 
   it('prefers the first validation detail over the wrapper message', () => {

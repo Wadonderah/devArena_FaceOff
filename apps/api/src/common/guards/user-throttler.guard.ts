@@ -1,4 +1,5 @@
 import { Injectable, type ExecutionContext } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type { AuthenticatedUser } from '../decorators';
@@ -19,7 +20,20 @@ export const ACCOUNT_THROTTLER = 'account';
 @Injectable()
 export class UserThrottlerGuard extends ThrottlerGuard {
   protected async getTracker(req: Request & { user?: AuthenticatedUser }): Promise<string> {
-    return req.user?.id ?? req.ip ?? 'unknown';
+    if (req.user?.id) return `user:${req.user.id}`;
+    if (req.ip) return `ip:${req.ip}`;
+
+    // The old fallback was the literal 'unknown', which is a single shared
+    // bucket: every caller Express could not resolve an address for counted
+    // against the same limit, so a handful of them could lock each other out
+    // for reasons none of them could see. A per-request value cannot be
+    // rate-limited collectively, which is the safer failure — the request still
+    // passes through every other guard, and an address-less caller is rare
+    // enough that the lost protection is not worth the shared lockout.
+    //
+    // Prefixes also keep the namespaces apart: without them a user whose id
+    // happened to equal an IP string would share that IP's bucket.
+    return `unresolved:${randomUUID()}`;
   }
 
   protected generateKey(context: ExecutionContext, suffix: string, name: string): string {
