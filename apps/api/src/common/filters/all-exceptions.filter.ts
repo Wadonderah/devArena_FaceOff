@@ -49,6 +49,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
     };
 
+    // ThrottlerGuard sets Retry-After on the response before it throws, and
+    // that header survives to here. A 429 raised by anything else would carry
+    // none, so a conservative floor is supplied rather than leaving the client
+    // to guess.
+    if (status === HttpStatus.TOO_MANY_REQUESTS && !response.getHeader('Retry-After')) {
+      response.setHeader('Retry-After', '5');
+    }
+
     response.status(status).json(body);
   }
 
@@ -61,6 +69,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const payload = exception.getResponse();
+
+      // Nest's ThrottlerException carries the literal string
+      // "ThrottlerException: Too Many Requests", and this filter passed any
+      // string payload straight through as `message` — so a participant with
+      // two tabs open saw an exception class name in the interface. Nothing
+      // downstream should ever have to recognise a provider's wording, so the
+      // sentence is replaced here rather than patched in the browser.
+      if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        return {
+          status,
+          code: 'RATE_LIMITED',
+          message: 'Too many requests. Wait a few seconds and try again.',
+        };
+      }
 
       if (typeof payload === 'string') {
         return { status, code: this.codeFor(status), message: payload };

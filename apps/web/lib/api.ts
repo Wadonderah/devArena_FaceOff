@@ -14,6 +14,8 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly details?: string[],
+    /// Seconds, from the response's Retry-After header. Present on 429s.
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -36,12 +38,16 @@ export class ApiError extends Error {
 export function describeError(
   error: unknown,
   fallbackTitle = 'Something went wrong',
-): { title: string; detail: string; rateLimited: boolean } {
+): { title: string; detail: string; rateLimited: boolean; retryAfterSeconds?: number } {
   if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
+    const wait = error.retryAfterSeconds;
     return {
       title: 'Going a bit fast',
-      detail: 'Give it a few seconds, then try again.',
+      detail: wait
+        ? `Try again in ${wait} second${wait === 1 ? '' : 's'}.`
+        : 'Give it a few seconds, then try again.',
       rateLimited: true,
+      retryAfterSeconds: wait,
     };
   }
 
@@ -119,11 +125,17 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
   if (!res.ok) {
     const problem = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    // Retry-After is the server telling us exactly how long to wait. Guessing
+    // instead would either nag the API or make the participant wait longer than
+    // they need to.
+    const retryAfter = Number(res.headers.get('Retry-After'));
+
     throw new ApiError(
       res.status,
       problem?.code ?? 'ERROR',
       problem?.message ?? res.statusText,
       problem?.details,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
     );
   }
 

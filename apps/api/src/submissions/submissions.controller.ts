@@ -60,8 +60,16 @@ export class SubmissionsController {
     return this.code.submit(userId, dto);
   }
 
+  // Run is the debugging loop, not a scored action: it executes against the
+  // sample cases the participant can already see, so it is not an oracle for
+  // the hidden ones the way `submit` would be.
+  //
+  // It was 1 per 15 seconds, which punishes exactly the behaviour the feature
+  // exists for — fix a typo, press Run, fix another, press Run. Six per minute
+  // keeps the same average load on Judge0 while letting a short burst through,
+  // which is how people actually iterate.
   @Post('code/run')
-  @Throttle({ default: { limit: 1, ttl: 15_000 } })
+  @Throttle({ default: { limit: 6, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   runCode(@CurrentUser('id') userId: string, @Body() dto: SubmitCodeDto) {
     return this.code.run(userId, dto);

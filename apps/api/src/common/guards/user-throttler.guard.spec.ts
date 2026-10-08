@@ -1,61 +1,65 @@
-import type { ExecutionContext } from '@nestjs/common';
-import { ACCOUNT_THROTTLER, UserThrottlerGuard } from './user-throttler.guard';
+import type { Request } from 'express';
+import { UserThrottlerGuard } from './user-throttler.guard';
+import type { AuthenticatedUser } from '../decorators';
 
-/// Exercises the key derivation only — the counting is the library's job.
-/// The point being pinned: one IP with many emails yields many `account` keys
-/// but one `default` key, which is what stops a venue from sharing a bucket
-/// without letting an attacker rotate emails past the IP ceiling.
+type Tracked = Request & { user?: AuthenticatedUser };
 
-function contextFor(body: Record<string, unknown>): ExecutionContext {
-  return {
-    switchToHttp: () => ({ getRequest: () => ({ body, ip: '10.0.0.1' }) }),
-    getClass: () => ({ name: 'AuthController' }),
-    getHandler: () => ({ name: 'login' }),
-  } as unknown as ExecutionContext;
-}
-
-// `generateKey` is protected; the subclass exposes it for the test.
-class Exposed extends UserThrottlerGuard {
-  key(context: ExecutionContext, tracker: string, name: string) {
-    return this.generateKey(context, tracker, name);
+// getTracker is protected; the test reaches it the way a subclass would.
+class Probe extends UserThrottlerGuard {
+  track(req: Tracked): Promise<string> {
+    return this.getTracker(req);
   }
 }
 
-function build() {
-  // ThrottlerGuard's constructor wants options/storage/reflector; none are
-  // touched by generateKey, so empty stand-ins are enough.
-  return new Exposed(
-    { throttlers: [] } as never,
-    {} as never,
-    { getAllAndOverride: () => undefined } as never,
-  );
-}
+// getTracker touches none of the base class's collaborators, so they are not
+// worth constructing.
+const guard = () => new Probe(null as never, null as never, null as never);
 
-describe('UserThrottlerGuard key derivation', () => {
-  it('keys the account throttler by IP and normalised email', () => {
-    const guard = build();
+describe('UserThrottlerGuard.getTracker', () => {
+  const user = { id: 'user-1' } as AuthenticatedUser;
 
-    const a = guard.key(contextFor({ email: 'Ama@Example.com ' }), '10.0.0.1', ACCOUNT_THROTTLER);
-    const b = guard.key(contextFor({ email: 'ama@example.com' }), '10.0.0.1', ACCOUNT_THROTTLER);
-    const c = guard.key(contextFor({ email: 'kwame@example.com' }), '10.0.0.1', ACCOUNT_THROTTLER);
+  // A whole venue behind one NAT is the pilot's actual setup. Keying
+  // authenticated traffic by IP would let one participant's submissions
+  // rate-limit everyone else in the room.
+  it('keys an authenticated request by user, not address', async () => {
+    const a = await guard().track({ user, ip: '10.0.0.1' } as Tracked);
+    const b = await guard().track({ user, ip: '10.0.0.2' } as Tracked);
 
-    expect(a).toBe(b); // case and whitespace do not split a bucket
-    expect(a).not.toBe(c); // a different account at the same IP is a different bucket
-  });
-
-  it('keys every other throttler by tracker alone, ignoring the body', () => {
-    const guard = build();
-
-    const a = guard.key(contextFor({ email: 'ama@example.com' }), '10.0.0.1', 'default');
-    const b = guard.key(contextFor({ email: 'kwame@example.com' }), '10.0.0.1', 'default');
-
-    // Same IP, different emails → same IP-level bucket. This is the ceiling an
-    // email-rotating attacker still runs into.
     expect(a).toBe(b);
   });
 
-  it('does not throw on a body with no email', () => {
-    const guard = build();
-    expect(() => guard.key(contextFor({}), '10.0.0.1', ACCOUNT_THROTTLER)).not.toThrow();
+  it('keys two participants at the same address separately', async () => {
+    const a = await guard().track({ user: { id: 'user-1' }, ip: '10.0.0.1' } as Tracked);
+    const b = await guard().track({ user: { id: 'user-2' }, ip: '10.0.0.1' } as Tracked);
+
+    expect(a).not.toBe(b);
+  });
+
+  // Login and register have no user yet, so IP is all there is.
+  it('falls back to the address when unauthenticated', async () => {
+    const a = await guard().track({ ip: '10.0.0.1' } as Tracked);
+    const b = await guard().track({ ip: '10.0.0.1' } as Tracked);
+
+    expect(a).toBe(b);
+    expect(a).toContain('10.0.0.1');
+  });
+
+  // The old fallback was the literal 'unknown': one shared bucket for every
+  // caller Express could not resolve an address for, so a handful of them could
+  // lock each other out for reasons none of them could see.
+  it('does not put address-less callers in one shared bucket', async () => {
+    const a = await guard().track({} as Tracked);
+    const b = await guard().track({} as Tracked);
+
+    expect(a).not.toBe(b);
+  });
+
+  // Without namespacing, a user whose id happened to equal an IP string would
+  // share that address's bucket.
+  it('keeps user and address namespaces apart', async () => {
+    const byUser = await guard().track({ user: { id: '10.0.0.1' } } as Tracked);
+    const byIp = await guard().track({ ip: '10.0.0.1' } as Tracked);
+
+    expect(byUser).not.toBe(byIp);
   });
 });
