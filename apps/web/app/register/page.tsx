@@ -5,12 +5,15 @@ import { useState, type FormEvent } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/input';
+import { canSubmitPasswords, shouldShowMismatch } from '@/lib/password-match';
+import { PasswordField } from '@/components/ui/password-field';
 import { AuthBackdrop } from '@/components/auth-backdrop';
 import { BrandMark } from '@/components/brand-mark';
 import { MailCheck } from 'lucide-react';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ displayName: '', email: '', password: '' });
+  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -18,8 +21,20 @@ export default function RegisterPage() {
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
+  const showMismatch = shouldShowMismatch(form.password, confirm);
+  const submittable = canSubmitPasswords(form.password, confirm);
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+
+    // Belt and braces with the disabled button: a form can still be submitted
+    // by pressing Enter in a field, and the API has no confirm field to
+    // validate against.
+    if (form.password !== confirm) {
+      setError('Passwords do not match');
+      return;
+    }
+
     setError(null);
     setPending(true);
 
@@ -105,9 +120,8 @@ export default function RegisterPage() {
           onChange={set('email')}
         />
 
-        <Field
+        <PasswordField
           label="Password"
-          type="password"
           name="password"
           autoComplete="new-password"
           required
@@ -116,13 +130,32 @@ export default function RegisterPage() {
           hint="At least 10 characters, including a letter and a number."
         />
 
+        <PasswordField
+          label="Confirm password"
+          name="confirmPassword"
+          autoComplete="new-password"
+          required
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          // Only complains once there is enough typed to be a real mismatch,
+          // rather than flashing an error at the first keystroke of a password
+          // nobody has finished entering.
+          error={showMismatch ? 'Passwords do not match' : undefined}
+        />
+
         {error && (
           <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-[14px] text-danger">
             {error}
           </p>
         )}
 
-        <Button type="submit" size="lg" loading={pending} className="w-full">
+        <Button
+          type="submit"
+          size="lg"
+          loading={pending}
+          disabled={!submittable}
+          className="w-full"
+        >
           Create account
         </Button>
       </form>

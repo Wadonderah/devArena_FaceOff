@@ -6,6 +6,7 @@ import { Suspense, useState, type FormEvent } from 'react'
 import { api, describeError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/input'
+import { PasswordField } from '@/components/ui/password-field'
 import { AuthBackdrop } from '@/components/auth-backdrop'
 import { BrandMark } from '@/components/brand-mark'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -88,9 +89,8 @@ function LoginForm() {
                         onChange={(e) => setEmail(e.target.value)}
                     />
 
-                    <Field
+                    <PasswordField
                         label="Password"
-                        type="password"
                         name="password"
                         autoComplete="current-password"
                         required
@@ -112,7 +112,16 @@ function LoginForm() {
                     </Button>
                 </form>
 
-                <p className="mt-6 text-[14px] text-ink-faint">
+                <p className="mt-4 text-[14px]">
+                    <Link
+                        href="/forgot-password"
+                        className="text-ink-faint underline underline-offset-4 transition-colors hover:text-ink-dim"
+                    >
+                        Forgot your password?
+                    </Link>
+                </p>
+
+                <p className="mt-2 text-[14px] text-ink-faint">
                     No account yet?{' '}
                     <Link
                         href="/register"
