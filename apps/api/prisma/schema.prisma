@@ -38,8 +38,7 @@ enum RevealMode {
   NEVER
 }
 
-/// How a round attributes score. INDIVIDUAL is the default so every existing
-/// round keeps its current behaviour.
+
 enum ParticipationMode {
   INDIVIDUAL
   TEAM
@@ -135,13 +134,10 @@ enum VerificationTokenType {
   OAUTH_EXCHANGE
 }
 
-/// The TEAM_REQUEST* members are declared ahead of the join-request flow, so
-/// that work needs no migration to alter this type.
 enum NotificationType {
   ANNOUNCEMENT
 
   /// A competition opened for registration.
-  ///
   /// The one notification that cannot be scoped to a competition's
   /// participants, because at the moment it is sent there are none — telling
   /// people they may now sign up is the entire point.
@@ -164,9 +160,7 @@ model User {
   id    String @id @default(uuid()) @db.Uuid
   email String @unique
 
-  /// Null for a provider-only account. Every read must handle null — notably
-  /// `login`, which has to answer identically for "no password set" and "wrong
-  /// password", or it becomes an oracle for which accounts are Google-only.
+
   passwordHash String?
 
   role          Role    @default(PARTICIPANT)

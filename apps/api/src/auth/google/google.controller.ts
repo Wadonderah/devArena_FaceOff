@@ -105,7 +105,6 @@ export class GoogleController {
 
     const signed = (req.cookies as Record<string, string> | undefined)?.[STATE_COOKIE];
     if (!this.google.verifyState(state, signed)) {
-      // A forged callback, or a stale tab. Both end the same way.
       return fail('state');
     }
 
@@ -121,7 +120,6 @@ export class GoogleController {
     }
   }
 
-  /// Step 3: the landing page trades the code for cookies, same-site.
   @Public()
   @Throttle({ default: { limit: 30, ttl: minutes(15) } })
   @Post('google/exchange')

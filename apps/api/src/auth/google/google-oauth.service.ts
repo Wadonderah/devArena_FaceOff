@@ -19,7 +19,6 @@ export interface GoogleIdentity {
 }
 
 /// Google's OAuth 2.0 authorization-code flow.
-///
 /// The `id_token` signature is not re-verified, and that is safe *only* because
 /// of how it arrives: the code exchange is a server-to-server POST over TLS
 /// authenticated with our client secret, so the response provably came from

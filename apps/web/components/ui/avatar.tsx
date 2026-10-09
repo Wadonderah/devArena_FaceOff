@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { cn } from '@/lib/cn';
 
 /// An account's picture, or its initial as a fallback.
-///
 /// `referrerPolicy="no-referrer"` keeps Google's CDN from learning which page
 /// the viewer is on. Remote hosts must also be allowed by `img-src` in
 /// middleware.ts, or the image is blocked with only a console violation.
@@ -41,9 +40,6 @@ export function Avatar({
       style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
     >
       {showImage ? (
-        /* Not next/image: at 28-64px there is nothing to optimise, and it
-           would need a remotePatterns entry duplicating the CSP's host. */
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src as string}
           alt=""

@@ -145,11 +145,9 @@ export class GoogleSignInService {
   }
 
   /// The pre-hijacking defence. Do not simplify this away.
-  ///
   /// The attack: register with someone else's address, never verify it, set a
   /// password you know, and wait. When the owner later signs in with Google, a
   /// naive link hands your password their account.
-  ///
   /// Google has vouched for the address by now (the caller checks), so the
   /// owner is the rightful holder: the password is cleared and every session
   /// revoked before the link. One transaction, because a link that committed
@@ -274,7 +272,7 @@ export class GoogleSignInService {
     return rest as SignedInUser;
   }
 
-  // ── The one-time exchange code ──────────────────────────────────────────
+  // The one-time exchange code 
   //
   // Exists because both auth cookies are SameSite=Strict, so the callback —
   // reached by a cross-site navigation — cannot set them. Stored hashed, so a
