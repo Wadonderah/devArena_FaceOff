@@ -12,21 +12,11 @@ interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
 
 /// A password input with a show/hide toggle.
 ///
-/// Typing a password you cannot see, on a phone keyboard, under time pressure,
-/// is where sign-in failures come from — and the usual response, trying again
-/// more slowly, is exactly what the login rate limit punishes.
-///
-/// The toggle is a real `<button>`, not an icon with an onClick: it must be
-/// reachable by keyboard, and a screen reader has to be able to say what it
-/// does and what state it is in. `aria-pressed` carries the state, so the
-/// accessible name stays constant rather than flipping between "Show" and
-/// "Hide" underneath the user.
-///
-/// `type` is switched rather than the text being masked some other way, so
-/// password managers still recognise the field. That is also why `autoComplete`
-/// is left to the caller — `current-password` on sign in and `new-password` on
-/// sign up mean different things to a manager, and guessing here would break
-/// both.
+/// `aria-pressed` carries the state so the accessible name stays constant
+/// rather than flipping under the user. `type` is switched rather than masking
+// /// the text another way, so password managers still recognise the field —
+/// `autoComplete` is left to the caller for the same reason, since
+/// `current-password` and `new-password` mean different things to a manager.
 export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
   function PasswordField({ label, hint, error, ...rest }, ref) {
     const [visible, setVisible] = useState(false);
@@ -47,8 +37,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
             onClick={() => setVisible((v) => !v)}
             aria-pressed={visible}
             aria-label="Show password"
-            // -1 would take it out of the tab order; the whole point is that it
-            // is reachable without a mouse.
+            // -1 would take it out of the tab order.
             className="grid size-9 place-items-center rounded-md text-ink-faint transition-colors hover:text-ink-dim focus-visible:outline-2 focus-visible:outline-brand-bright"
           >
             <Icon aria-hidden size={16} strokeWidth={1.5} />

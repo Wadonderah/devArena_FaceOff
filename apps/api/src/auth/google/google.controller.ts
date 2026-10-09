@@ -25,15 +25,9 @@ const minutes = (n: number) => n * 60_000;
 
 const STATE_COOKIE = 'faceoff_oauth_state';
 
-/// The state cookie is the one cookie here that MUST survive a cross-site
-/// navigation, because it is read when Google redirects back. So it is `lax`
-/// rather than `strict` — the single deliberate exception in the app, and the
-/// reason the rest of the flow needs the exchange dance at all.
-///
-/// `lax` is safe for this one: it is sent on a top-level GET navigation, which
-/// is exactly the callback and nothing else, and it carries no authority of its
-/// own — only a signed nonce that is useless without the matching `state`
-/// parameter from Google.
+/// `lax`, not `strict` — the only such cookie in the app. It has to survive
+/// Google's cross-site redirect back to us. Safe here because it carries no
+/// authority: only a signed nonce, useless without Google's `state` parameter.
 function stateCookieOptions(config: AppConfigService): CookieOptions {
   return {
     httpOnly: true,
@@ -54,11 +48,7 @@ export class GoogleController {
     private readonly config: AppConfigService,
   ) {}
 
-  /// Which providers this deployment can actually use.
-  ///
-  /// The frontend asks before rendering a Google button, so an environment
-  /// without credentials shows a sign-in page with no dead button on it —
-  /// rather than one that sends people to a broken redirect.
+  /// Asked before the frontend renders a provider button.
   @Public()
   @Get('providers')
   providers() {
@@ -69,18 +59,11 @@ export class GoogleController {
   @Public()
   @Throttle({ default: { limit: 30, ttl: minutes(15) } })
   @Get('google')
-  // Bare `@Res()`, not `@Res({ passthrough: true })`.
-  //
-  // Passthrough hands the response back to Nest to serialise the return value,
-  // which is right for `exchange` below — it sets cookies and then returns a
-  // body. It is wrong for a redirect: `res.redirect()` has already sent the
-  // headers, so Nest trying to send `undefined` afterwards throws "Cannot set
-  // headers after they are sent to the client". `callback` gets this right
-  // already; this one did not.
+  // Bare `@Res()`: with `passthrough` Nest also serialises the return value,
+  // which throws "Cannot set headers after they are sent" after a redirect.
   start(@Res() res: Response) {
-    // 404 rather than 503: on a deployment with no credentials this route does
-    // not meaningfully exist, and saying so is less misleading than implying a
-    // temporary outage.
+    // 404, not 503: without credentials this route does not exist, and 503
+    // would imply a temporary outage.
     if (!this.google.isConfigured) {
       throw new NotFoundException('Google sign-in is not enabled.');
     }
@@ -93,15 +76,12 @@ export class GoogleController {
 
   /// Step 2: Google redirects back here.
   ///
-  /// This handler deliberately sets no auth cookies. It is reached by a
-  /// cross-site navigation, and both auth cookies are SameSite=Strict, so any
-  /// it set would be silently dropped by the browser — the participant would
-  /// land on the dashboard logged out, with nothing in the logs to say why.
-  ///
-  /// Instead it mints a short-lived single-use code and redirects to a page on
-  /// our own origin, which exchanges it same-site. Errors redirect too, with a
-  /// reason in the query string: throwing here would render a JSON error body
-  /// at an api.* URL, which is a dead end for someone who was signing in.
+  /// Sets no auth cookies, and must not: this is reached by a cross-site
+  /// navigation, and a SameSite=Strict cookie set on such a response is
+  /// silently dropped — the participant would land logged out with nothing in
+  /// the logs. It mints a single-use code instead and redirects to our own
+  /// origin to finish. Errors redirect too; a JSON body on an api.* URL is a
+  /// dead end for someone mid sign-in.
   @Public()
   @Throttle({ default: { limit: 30, ttl: minutes(15) } })
   @Get('google/callback')
@@ -119,14 +99,12 @@ export class GoogleController {
 
     if (!this.google.isConfigured) return fail('unavailable');
 
-    // The participant pressed Cancel on the consent screen. Not an error worth
-    // a scary message.
+    // Cancelled at the consent screen. Not worth a scary message.
     if (error) return fail('cancelled');
     if (!code) return fail('cancelled');
 
     const signed = (req.cookies as Record<string, string> | undefined)?.[STATE_COOKIE];
     if (!this.google.verifyState(state, signed)) {
-      // Either a forged callback or a stale tab. Both end the same way.
       return fail('state');
     }
 
@@ -137,13 +115,11 @@ export class GoogleController {
 
       return res.redirect(`${landing}?code=${encodeURIComponent(exchange)}`);
     } catch {
-      // The underlying services have already logged the cause with detail. All
-      // the browser gets is a reason code the landing page can phrase.
+      // Already logged with detail downstream; the browser gets a reason code.
       return fail('failed');
     }
   }
 
-  /// Step 3: the landing page trades the code for cookies, same-site.
   @Public()
   @Throttle({ default: { limit: 30, ttl: minutes(15) } })
   @Post('google/exchange')
@@ -152,8 +128,7 @@ export class GoogleController {
     const user = await this.signIn.redeemExchangeCode(dto.code);
     const tokens = await this.tokens.issue(user);
 
-    // The same seam password login uses, so a Google session is identical to
-    // any other from here on — same cookies, same TTLs, same rotation.
+    // Same seam as password login: identical cookies, TTLs and rotation.
     setAuthCookies(res, this.config, tokens);
 
     return { user };

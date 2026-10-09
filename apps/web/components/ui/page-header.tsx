@@ -3,17 +3,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
-/// The top of a page: what it is, what it is for, and what you can do here.
-///
-/// Every page had hand-rolled this — an `h1` at `text-3xl`, a `text-[15px]`
-/// subtitle, and a row of buttons, with the gap and the wrap behaviour slightly
-/// different each time. Four files had four different bottom margins, so the
-/// distance from the title to the first panel changed as you moved between
-/// them, which is the kind of inconsistency nobody can name but everybody
-/// feels.
-///
-/// The fading rule is the same device as `Section` and the competition panel,
-/// so a page, a group and a panel all announce themselves the same way.
+/// The top of a page: title, what it is for, and the actions available.
 export function PageHeader({
   title,
   badge,
@@ -23,14 +13,12 @@ export function PageHeader({
   className,
 }: {
   title: ReactNode;
-  /// Rendered beside the title, deliberately outside the `h1`. A status chip is
-  /// not part of the page's name, and a screen reader reading "Leaderboard
-  /// registration open" as one heading is not what anyone meant.
+  /// Beside the title but outside the `h1` — a status chip is not part of the
+  /// page's name.
   badge?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
-  /// Off for a page whose first element is already a panel with its own top
-  /// edge — two rules 16px apart read as a mistake.
+  /// Off when the first element below is already a panel with its own edge.
   rule?: boolean;
   className?: string;
 }) {
@@ -49,9 +37,6 @@ export function PageHeader({
           )}
         </div>
 
-        {/* Full width on a phone so the buttons get a line of their own
-            instead of being squeezed beside a wrapping title, and so they wrap
-            among themselves predictably rather than one-per-row. */}
         {actions && (
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>
         )}

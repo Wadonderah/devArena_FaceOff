@@ -1,8 +1,7 @@
 import { cn } from '@/lib/cn';
 import type { RoundState, CompetitionState } from '@/lib/types';
 
-/// Exported so a control that has to agree with a badge — the state menu —
-/// cannot drift from it by keeping a second private copy of the list.
+/// Exported so the state menu cannot drift from these.
 export type Tone = 'neutral' | 'live' | 'success' | 'warn' | 'danger' | 'brand';
 
 const TONES: Record<Tone, string> = {
@@ -14,22 +13,8 @@ const TONES: Record<Tone, string> = {
   brand: 'border-brand/35 bg-brand/10 text-brand-bright',
 };
 
-/// A small status or label chip.
-///
-/// Rewritten because a row of these read as sloppy, and the cause was four
-/// treatments stacked on one small element: a tinted fill, a 40%-opacity
-/// border, `uppercase`, and 0.08em letter-spacing. Any two of those are fine.
-/// All four turn an 11px chip into a wide shouting blob — "REGISTRATION OPEN"
-/// was seventeen tracked capitals, which is wider than most of the names it sat
-/// beside.
-///
-/// Dropping `uppercase` and the tracking is most of the fix, and it also
-/// repaired every chip that was already passing sentence-case text: "You
-/// captain this team" and "Answer from document" were being rendered as
-/// shouting, which no caller intended.
-///
-/// `whitespace-nowrap` because a chip that wraps onto two lines inside its own
-/// border does not read as a chip at all.
+/// A small status or label chip. Children are rendered as written — there is no
+/// `uppercase` here, so callers pass sentence case.
 export function Badge({
   tone = 'neutral',
   pulse,
@@ -40,9 +25,7 @@ export function Badge({
   tone?: Tone;
   /// A live state. Implies `dot`, and animates it.
   pulse?: boolean;
-  /// Marks this as a *status* rather than a label. A plain label — "Captain",
-  /// "Full" — deliberately has no dot: a dot promises that the thing is in one
-  /// of several states, and those are not.
+  /// For a status, not a plain label: a dot implies one of several states.
   dot?: boolean;
   children: React.ReactNode;
   className?: string;
@@ -83,17 +66,9 @@ const ROUND_TONES: Record<RoundState, Tone> = {
   ARCHIVED: 'neutral',
 };
 
-/// Every label is written out rather than derived from the enum.
-///
-/// These used to be `state.toLowerCase()` with a CSS `uppercase` on top, which
-/// worked only for as long as the chip shouted — the moment the casing was
-/// dropped, "draft" and "completed" rendered lowercase. Spelling them out also
-/// lets each one be the right word rather than the enum's: a paused round
-/// resumes and a finalized one is locked, and both read as "over" if left as
-/// the member name.
-///
-/// "Live" rather than "Live now": the dot beside it is already pulsing, so
-/// "now" was a word spent repeating an animation.
+/// Written out rather than derived from the enum, so each can be the right
+/// word: a paused round resumes and a finalized one is locked, and both read as
+/// "over" if left as the member name.
 const ROUND_LABELS: Record<RoundState, string> = {
   DRAFT: 'Draft',
   SCHEDULED: 'Scheduled',
@@ -122,8 +97,7 @@ const COMPETITION_TONES: Record<CompetitionState, Tone> = {
 
 const COMPETITION_LABELS: Record<CompetitionState, string> = {
   DRAFT: 'Draft',
-  // Kept long where the short version would be ambiguous. "Open" beside a Join
-  // button could mean the competition itself is running.
+  // Not "Open" — beside a Join button that would read as "already running".
   REGISTRATION: 'Registration open',
   LIVE: 'Live',
   COMPLETED: 'Completed',
