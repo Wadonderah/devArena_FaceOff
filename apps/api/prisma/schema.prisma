@@ -128,6 +128,16 @@ enum ScoreSource {
 enum VerificationTokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+
+  /// A one-time code handed to the browser after a Google sign-in.
+  ///
+  /// Exists because both auth cookies are SameSite=Strict, and a Strict cookie
+  /// set on the response to a cross-site navigation — which is exactly what
+  /// Google's redirect back to us is — is not stored by the browser. So the
+  /// callback cannot sign anyone in. It issues one of these instead and
+  /// redirects to a page on our own origin, which exchanges it same-site for
+  /// the real cookies.
+  OAUTH_EXCHANGE
 }
 
 /// Why a participant was notified.
@@ -156,10 +166,23 @@ enum NotificationType {
   TEAM_REQUEST_DECLINED
 }
 
+enum OAuthProvider {
+  GOOGLE
+}
+
 model User {
-  id            String  @id @default(uuid()) @db.Uuid
-  email         String  @unique
-  passwordHash  String
+  id    String @id @default(uuid()) @db.Uuid
+  email String @unique
+
+  /// Null for an account that has only ever signed in with a provider.
+  ///
+  /// Widening this is what makes Google sign-in possible without inventing a
+  /// fake password nobody knows. Every read of it now has to handle null —
+  /// notably `login`, which must still answer identically for "no password set"
+  /// and "wrong password", or it becomes an oracle for which accounts are
+  /// Google-only.
+  passwordHash String?
+
   role          Role    @default(PARTICIPANT)
   emailVerified Boolean @default(false)
   isActive      Boolean @default(true)
@@ -182,6 +205,7 @@ model User {
   scoreEvents        ScoreEvent[]
   auditLogs          AuditLog[]
   notifications      Notification[]
+  oauthAccounts      OAuthAccount[]
 
   @@index([role])
   @@map("users")
@@ -759,4 +783,33 @@ model Notification {
   /// needs, so it could not be used to satisfy the sort.
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+/// A provider identity linked to an account.
+///
+/// Separate from User rather than a pair of columns on it, so one account can
+/// hold several providers later without another migration, and so the unique
+/// below can do the work that matters.
+model OAuthAccount {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+
+  provider OAuthProvider
+
+  /// Google's `sub`. Stable for the lifetime of the Google account and never
+  /// reused, which is why the link is keyed on this and not on the email — a
+  /// Google user can change their email address, and someone else can later be
+  /// issued the one they gave up.
+  providerAccountId String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One provider identity maps to exactly one account. This is the constraint
+  /// that stops two of our users claiming the same Google identity.
+  @@unique([provider, providerAccountId])
+  /// One account holds at most one identity per provider.
+  @@unique([userId, provider])
+  @@map("oauth_accounts")
 }

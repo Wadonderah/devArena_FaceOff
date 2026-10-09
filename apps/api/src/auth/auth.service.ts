@@ -128,6 +128,20 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    // An account that has only ever signed in with Google has no password hash.
+    //
+    // Handled exactly like a wrong password — same dummy compare, same timing,
+    // same message — and deliberately NOT with a helpful "this account uses
+    // Google". That hint would turn this endpoint into an oracle for which
+    // addresses are Google-only, which is useful to an attacker choosing where
+    // to aim a phishing page and useless to anyone else: the sign-in screen
+    // already shows the Google button to everybody.
+    if (user.passwordHash === null) {
+      await bcrypt.compare(dto.password, DUMMY_HASH);
+      await this.recordFailedAttempt(user.id, user.failedLoginAttempts, ctx);
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
     const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
 
     if (!passwordMatches) {
