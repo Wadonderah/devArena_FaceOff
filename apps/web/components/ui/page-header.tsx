@@ -35,7 +35,7 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <header className={cn('mb-6', className)}>
+    <header className={cn('mb-5 sm:mb-6', className)}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
@@ -43,17 +43,24 @@ export function PageHeader({
             {badge}
           </div>
           {subtitle && (
-            <p className="mt-1.5 max-w-xl text-[14px] leading-relaxed text-ink-dim">{subtitle}</p>
+            <p className="mt-1.5 max-w-xl text-[13px] leading-relaxed text-ink-dim sm:text-[14px]">
+              {subtitle}
+            </p>
           )}
         </div>
 
-        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        {/* Full width on a phone so the buttons get a line of their own
+            instead of being squeezed beside a wrapping title, and so they wrap
+            among themselves predictably rather than one-per-row. */}
+        {actions && (
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>
+        )}
       </div>
 
       {rule && (
         <span
           aria-hidden
-          className="mt-5 block h-px w-full bg-gradient-to-r from-line via-line to-transparent"
+          className="mt-4 block h-px w-full bg-gradient-to-r from-line via-line to-transparent sm:mt-5"
         />
       )}
     </header>

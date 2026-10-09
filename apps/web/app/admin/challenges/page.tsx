@@ -749,7 +749,7 @@ function ChallengesContent() {
       />
 
       {creating && (
-        <section className="panel hairline mb-6 p-6">
+        <section className="panel hairline mb-6 p-4 sm:p-6">
           <h2 className="mb-4 text-lg">{FORM_TITLES[creating]}</h2>
           {creating === 'MCQ' ? (
             <McqForm onDone={done} />
@@ -798,7 +798,7 @@ function ChallengesContent() {
             ))}
           </ul>
           {data?.length === 0 && (
-            <p className="p-8 text-center text-[14px] text-ink-dim">
+            <p className="p-5 sm:p-8 text-center text-[14px] text-ink-dim">
               No challenges yet. Create one above.
             </p>
           )}

@@ -923,7 +923,7 @@ function ManageCompetition({ id }: { id: string }) {
         )}
 
         {data.rounds.length === 0 ? (
-          <p className="p-8 text-center text-[14px] text-ink-dim">
+          <p className="p-5 sm:p-8 text-center text-[14px] text-ink-dim">
             No rounds yet. Create one to get started.
           </p>
         ) : (

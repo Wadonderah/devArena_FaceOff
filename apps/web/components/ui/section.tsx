@@ -48,7 +48,7 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className={cn('mt-10', className)}>
+    <section className={cn('mt-8 sm:mt-10', className)}>
       <div className="flex items-center gap-2.5">
         {Icon && (
           <Icon
@@ -89,7 +89,7 @@ export function Section({
         </p>
       )}
 
-      <div className="mt-4">{children}</div>
+      <div className="mt-3.5 sm:mt-4">{children}</div>
     </section>
   );
 }

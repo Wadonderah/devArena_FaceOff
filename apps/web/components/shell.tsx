@@ -162,7 +162,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {/* pb-24 clears the fixed bottom bar, so the last element on a page is
           never hidden behind it. min-w-0 so a wide child cannot push the whole
           layout sideways. */}
-      <main id="main" className="w-full min-w-0 flex-1 px-4 py-6 pb-24 sm:px-6 lg:pb-8">
+      <main id="main" className="w-full min-w-0 flex-1 px-4 py-4 sm:py-6 pb-24 sm:px-6 lg:pb-8">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
 

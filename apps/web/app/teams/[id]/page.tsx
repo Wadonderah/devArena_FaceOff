@@ -197,7 +197,7 @@ function TeamView({ id }: { id: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Team unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">{message(error, 'Please try again.')}</p>
         <Link href="/dashboard" className="mt-5 inline-block">
@@ -253,7 +253,7 @@ function TeamView({ id }: { id: string }) {
       />
 
       {isMember && team.code && (
-        <section className="panel hairline bracketed mb-5 flex flex-wrap items-center justify-between gap-4 p-5">
+        <section className="panel hairline bracketed mb-5 flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
               Invite code

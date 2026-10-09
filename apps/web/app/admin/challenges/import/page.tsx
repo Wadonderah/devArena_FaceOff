@@ -83,7 +83,7 @@ function DraftCard({
   return (
     <li
       className={cn(
-        'rounded-xl border bg-surface-1 p-5',
+        'rounded-xl border bg-surface-1 p-4 sm:p-5',
         incomplete ? 'border-warn/45' : 'border-line',
       )}
     >
@@ -297,7 +297,7 @@ function ImportContent() {
       />
 
       {!preview && (
-        <section className="panel hairline bracketed p-8 text-center">
+        <section className="panel hairline bracketed p-5 sm:p-8 text-center">
           <input
             ref={fileInput}
             type="file"
@@ -323,7 +323,7 @@ function ImportContent() {
             Select file
           </Button>
 
-          <p className="mt-6 border-t border-line pt-5 text-[13px] text-ink-faint">
+          <p className="mt-6 border-t border-line pt-4 sm:pt-5 text-[13px] text-ink-faint">
             Questions must be numbered as typed text, one column, four options each.{' '}
             <span className="text-ink-dim">
               Word&apos;s automatic list numbering does not survive extraction — type the numbers
@@ -335,7 +335,7 @@ function ImportContent() {
 
       {preview && (
         <>
-          <section className="panel hairline mb-5 p-5">
+          <section className="panel hairline mb-5 p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap gap-x-8 gap-y-2">
                 {[
@@ -376,7 +376,7 @@ function ImportContent() {
 
           {drafts.length > 0 && (
             <>
-              <section className="panel hairline mb-5 p-5">
+              <section className="panel hairline mb-5 p-4 sm:p-5">
                 <h2 className="text-[12px] uppercase tracking-[0.12em] text-ink-faint">
                   Apply to all
                 </h2>
@@ -445,7 +445,7 @@ function ImportContent() {
       )}
 
       {created !== null && drafts.length === 0 && (
-        <section className="panel hairline p-8 text-center">
+        <section className="panel hairline p-5 sm:p-8 text-center">
           <p className="font-display text-xl">{created} questions added</p>
           <p className="mt-2 text-[14px] text-ink-dim">
             They are in the library as drafts. Publish them before adding them to a round.

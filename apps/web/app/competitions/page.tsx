@@ -22,7 +22,7 @@ function CompetitionsList() {
       />
 
       {!data || data.length === 0 ? (
-        <div className="panel p-12 text-center">
+        <div className="panel p-8 sm:p-12 text-center">
           <Trophy aria-hidden size={26} strokeWidth={1.25} className="mx-auto text-ink-faint" />
           <p className="mt-3 text-[15px] text-ink-dim">No competitions are published yet.</p>
           <p className="mt-1 text-[13px] text-ink-faint">
@@ -35,7 +35,7 @@ function CompetitionsList() {
             <li key={competition.id}>
               <Link
                 href={`/competitions/${competition.id}`}
-                className="panel hairline flex flex-wrap items-center justify-between gap-3 p-5 transition-colors hover:border-line-bright"
+                className="panel hairline flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5 transition-colors hover:border-line-bright"
               >
                 <div className="flex min-w-0 items-start gap-3.5">
                   <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl border border-line bg-surface-2 text-brand-bright">

@@ -33,7 +33,7 @@ function RoundCard({
   const open = round.state === 'LIVE' && competitionJoined;
 
   return (
-    <li className="panel hairline p-5">
+    <li className="panel hairline p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
@@ -161,7 +161,7 @@ function TeamPanel({
   // the way out of it both visible. Previously this looked like a dead end.
   if (team) {
     return (
-      <section className="panel hairline mb-6 flex flex-wrap items-center justify-between gap-4 p-5">
+      <section className="panel hairline mb-6 flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
         <div className="min-w-0">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
             Your team
@@ -187,7 +187,7 @@ function TeamPanel({
   const teams = allTeams ?? [];
 
   return (
-    <section className="panel hairline mb-6 p-5">
+    <section className="panel hairline mb-6 p-4 sm:p-5">
       <h2 className="text-lg">Teams</h2>
       <p className="mt-1 text-[14px] text-ink-dim">
         Team rounds score through your team, so join one before they start. You can be in one team
@@ -230,7 +230,7 @@ function TeamPanel({
         </div>
       )}
 
-      <div className="mt-6 grid gap-5 border-t border-line pt-5 sm:grid-cols-2">
+      <div className="mt-6 grid gap-5 border-t border-line pt-4 sm:pt-5 sm:grid-cols-2">
         <form
           className="space-y-2.5"
           onSubmit={(e) => {
@@ -303,7 +303,7 @@ function CompetitionContent({ id }: { id: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Competition unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">
           {error instanceof ApiError ? error.displayMessage : 'Please try again.'}
@@ -378,7 +378,7 @@ function CompetitionContent({ id }: { id: string }) {
       <h2 className="mb-3 text-[12px] uppercase tracking-[0.1em] text-ink-faint">Rounds</h2>
 
       {data.rounds.length === 0 ? (
-        <div className="panel p-8 text-center text-[14px] text-ink-dim">
+        <div className="panel p-5 sm:p-8 text-center text-[14px] text-ink-dim">
           Rounds will appear here once the organizer publishes them.
         </div>
       ) : (

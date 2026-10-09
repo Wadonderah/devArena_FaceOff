@@ -113,7 +113,7 @@ function AnnouncementForm() {
       />
 
       <form
-        className="panel hairline space-y-5 p-5"
+        className="panel hairline space-y-5 p-4 sm:p-5"
         onSubmit={(event) => {
           event.preventDefault();
           if (ready) setConfirming(true);

@@ -43,7 +43,7 @@ export function TeamCard({ competitionId }: { competitionId: string }) {
   const field = board?.rows.length ?? 0;
 
   return (
-    <section className="panel hairline p-5">
+    <section className="panel hairline p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
           <p className="text-[12px] text-ink-faint">Your team</p>

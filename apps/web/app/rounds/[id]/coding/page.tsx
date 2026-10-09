@@ -275,7 +275,7 @@ function Problem({
           outside moved the page, and reaching the editor meant scrolling
           through the whole problem first. Stacked, it should simply be as tall
           as it needs to be and let the page scroll. */}
-      <section className="panel hairline p-6 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
+      <section className="panel hairline p-4 sm:p-6 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl">{challenge.title}</h2>
           <span className="shrink-0 text-[13px] text-ink-faint">{challenge.points} pts</span>
@@ -398,7 +398,7 @@ function CodingRound({ roundId }: { roundId: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Round unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">
           {describeError(error, 'Round unavailable').detail}

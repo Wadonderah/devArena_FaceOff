@@ -244,7 +244,7 @@ export function NotificationBell({ className }: { className?: string }) {
                 // errored would render "Nothing yet" — telling the reader they
                 // have no notifications when the truth is that we could not
                 // find out.
-                <div className="px-4 py-8 text-center">
+                <div className="px-4 py-5 sm:py-8 text-center">
                   <p className="text-[13px] text-ink-dim">Could not load notifications</p>
                   <button
                     type="button"
@@ -255,7 +255,7 @@ export function NotificationBell({ className }: { className?: string }) {
                   </button>
                 </div>
               ) : items.length === 0 ? (
-                <div className="px-4 py-9 text-center">
+                <div className="px-4 py-6 sm:py-9 text-center">
                   <BellOff
                     aria-hidden
                     size={18}

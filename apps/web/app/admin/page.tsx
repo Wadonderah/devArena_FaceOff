@@ -20,10 +20,16 @@ import { Section } from '@/components/ui/section';
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: 'warn' | 'danger' }) {
   return (
-    <div className="panel hairline p-4">
-      <p className="text-[11px] uppercase tracking-[0.1em] text-ink-faint">{label}</p>
+    <div className="panel hairline p-3 sm:p-4">
+      {/* Three of these share about 358px on a phone, so roughly 111px each
+          less padding. "Participants" at 11px with 0.1em tracking does not fit
+          that, and was wrapping to two lines in only one of the three cards —
+          which made the row of numbers sit at different heights. */}
+      <p className="text-[10px] uppercase tracking-[0.06em] text-ink-faint sm:text-[11px] sm:tracking-[0.1em]">
+        {label}
+      </p>
       <p
-        className={`tabular mt-1 font-display text-2xl ${
+        className={`tabular mt-1 font-display text-xl sm:text-2xl ${
           tone === 'danger' ? 'text-danger' : tone === 'warn' ? 'text-warn' : ''
         }`}
       >
@@ -145,7 +151,7 @@ function CompetitionAdmin({ competition }: { competition: CompetitionListItem })
           ))}
         </ul>
       ) : (
-        <p className="p-6 text-center text-[14px] text-ink-dim">No rounds yet.</p>
+        <p className="p-4 sm:p-6 text-center text-[14px] text-ink-dim">No rounds yet.</p>
       )}
     </section>
   );
@@ -289,7 +295,7 @@ function AdminContent() {
       />
 
       {creating && (
-        <section className="panel hairline mb-6 p-6">
+        <section className="panel hairline mb-6 p-4 sm:p-6">
           <h2 className="mb-4 text-lg">New competition</h2>
           <NewCompetitionForm
             onDone={() => {

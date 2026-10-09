@@ -47,28 +47,34 @@ function CurrentCompetition({ id }: { id: string }) {
     >
       <FaceOffRule live={isLive} />
 
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3.5 p-4 sm:gap-y-4 sm:p-6">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
             {/* The page's visual anchor, and the only large type on it. */}
             <h2 className="text-2xl leading-tight">{data.name}</h2>
             <CompetitionStateBadge state={data.state} />
           </div>
+          {/* Clamped to two lines on a phone. A three-sentence description was
+              pushing the round — the row that matters during an event — most of
+              the way off a 390px screen. The full text is one tap away on the
+              competition page. */}
           {data.description && (
-            <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-ink-dim">
+            <p className="mt-2 line-clamp-2 max-w-xl text-[13px] leading-relaxed text-ink-dim sm:line-clamp-none sm:text-[14px]">
               {data.description}
             </p>
           )}
         </div>
 
-        <div className="flex shrink-0 gap-2">
-          <Link href={`/leaderboard/${data.id}`}>
-            <Button variant="secondary" size="sm">
+        {/* Full width on a phone, so the two buttons share one line below the
+            title instead of being crushed beside it. */}
+        <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+          <Link href={`/leaderboard/${data.id}`} className="flex-1 sm:flex-none">
+            <Button variant="secondary" size="sm" className="w-full">
               Standings
             </Button>
           </Link>
-          <Link href={`/competitions/${data.id}`}>
-            <Button variant="secondary" size="sm" icon={<ArrowRight />}>
+          <Link href={`/competitions/${data.id}`} className="flex-1 sm:flex-none">
+            <Button variant="secondary" size="sm" icon={<ArrowRight />} className="w-full">
               Open
             </Button>
           </Link>
@@ -79,7 +85,7 @@ function CurrentCompetition({ id }: { id: string }) {
           same block — during an event this is the only row that matters. */}
       <div
         className={cn(
-          'flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t px-6 py-4',
+          'flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t px-4 py-3.5 sm:px-6 sm:py-4',
           isLive ? 'border-live/20 bg-live/[0.04]' : 'border-line bg-surface-2/30',
         )}
       >
@@ -106,9 +112,14 @@ function CurrentCompetition({ id }: { id: string }) {
           )}
         </div>
 
+        {/* Full width on a phone: it is the primary action on the page during
+            a round, and a 120px button floated right is both easy to miss and
+            awkward to hit with a thumb. */}
         {focus?.state === 'LIVE' && data.joined && (
-          <Link href={`/rounds/${focus.id}/${ROUND_PATH[focus.type]}`}>
-            <Button icon={<ArrowRight />}>Enter round</Button>
+          <Link href={`/rounds/${focus.id}/${ROUND_PATH[focus.type]}`} className="w-full sm:w-auto">
+            <Button icon={<ArrowRight />} className="w-full">
+              Enter round
+            </Button>
           </Link>
         )}
       </div>
@@ -159,7 +170,7 @@ function DashboardContent() {
       ) : !hasAny ? (
         <div className="overflow-hidden rounded-xl border border-line bg-surface-1">
           <FaceOffRule />
-          <div className="p-10 text-center">
+          <div className="p-6 text-center sm:p-10">
             <h2 className="text-lg">Nothing running yet</h2>
             <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-ink-dim">
               No competition has opened. When an organizer starts the next season it appears

@@ -93,7 +93,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
 
   return (
     <Shell>
-      <div className="mb-7 overflow-hidden rounded-xl border border-line bg-surface-1/70">
+      <div className="mb-5 overflow-hidden rounded-xl border border-line bg-surface-1/70 sm:mb-7">
         {/* The event's pulse. Amber-idle, live-coloured and moving the moment a
             round opens — visible from across a room without reading a word. */}
         <div
@@ -106,7 +106,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
           )}
         />
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 sm:gap-x-5 sm:gap-y-3 sm:px-4 sm:py-2.5">
           <span
             className={cn(
               'rounded-md border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em]',

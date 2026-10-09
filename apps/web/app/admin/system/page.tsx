@@ -71,7 +71,7 @@ function HealthPanel() {
   const entries = Object.entries(data ?? {});
 
   return (
-    <section className="panel hairline p-5">
+    <section className="panel hairline p-4 sm:p-5">
       <h2 className="text-[12px] uppercase tracking-[0.1em] text-ink-faint">Dependencies</h2>
       <ul className="mt-3 grid gap-2 sm:grid-cols-3">
         {entries.map(([name, detail]) => {
@@ -241,7 +241,7 @@ function AuditPanel() {
       </div>
 
       {!data || data.length === 0 ? (
-        <p className="p-6 text-center text-[14px] text-ink-dim">Nothing recorded yet.</p>
+        <p className="p-4 sm:p-6 text-center text-[14px] text-ink-dim">Nothing recorded yet.</p>
       ) : (
         <ul className="divide-y divide-line/60">
           {data.map((entry) => (

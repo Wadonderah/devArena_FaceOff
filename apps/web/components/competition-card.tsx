@@ -54,7 +54,7 @@ export function CompetitionCard({ competition }: { competition: CompetitionListI
   return (
     <Link
       href={`/competitions/${id}`}
-      className="group block rounded-xl border border-line bg-surface-1 p-5 transition-colors hover:border-brand/40 hover:bg-surface-2/60"
+      className="group block rounded-xl border border-line bg-surface-1 p-4 transition-colors hover:border-brand/40 hover:bg-surface-2/60 sm:p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
         <h3 className="text-lg leading-snug">{name}</h3>
@@ -62,7 +62,9 @@ export function CompetitionCard({ competition }: { competition: CompetitionListI
       </div>
 
       {description && (
-        <p className="mt-2 line-clamp-2 text-[14px] leading-relaxed text-ink-dim">{description}</p>
+        <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-ink-dim sm:text-[14px]">
+          {description}
+        </p>
       )}
 
       {/* Separated from the copy above by a rule rather than just stacked, so
