@@ -2,15 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
 import { LayoutGrid, LogOut, Trophy, Users, Wrench } from 'lucide-react';
 import { Monogram } from '@/components/brand-mark';
 import { NotificationBell } from '@/components/notification-bell';
 import { Avatar } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { api } from '@/lib/api';
-import { useCompetitions, useCurrentUser, useLogout, useProfile } from '@/lib/hooks';
-import type { Team } from '@/lib/types';
+import { useCurrentUser, useLogout, useMyTeams, useProfile } from '@/lib/hooks';
 import { cn } from '@/lib/cn';
 
 const NAV = [
@@ -51,24 +48,30 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const isStaff = user?.role === 'ORGANIZER' || user?.role === 'SUPER_ADMIN';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
-  // Surface the participant's team so it is reachable from anywhere, rather
-  // than only by navigating through Competitions.
-  const { data: competitions } = useCompetitions();
-  const active = competitions?.find((c) => c.state === 'LIVE' || c.state === 'REGISTRATION');
-
-  const { data: myTeam } = useQuery({
-    queryKey: ['my-team', active?.id],
-    queryFn: () => api<Team | null>(`/competitions/${active!.id}/teams/mine`),
-    enabled: Boolean(active && user && !isStaff),
-    retry: false,
-  });
+  // Asked for directly rather than guessed at. This used to pick the first
+  // LIVE-or-REGISTRATION competition and ask for the viewer's team in it, so a
+  // newly opened competition with no teams hid the link for everyone — and it
+  // was skipped entirely for staff, who can be participants too.
+  const { data: myTeams } = useMyTeams();
+  const myTeam = myTeams?.[0];
 
   const links = [
     ...NAV,
-    ...(myTeam ? [{ href: `/teams/${myTeam.id}`, label: 'My team', icon: Users }] : []),
+    ...(myTeam
+      ? [
+          {
+            href: `/teams/${myTeam.id}`,
+            // The rail has room for the real name, which is what makes this
+            // findable; the phone bar does not.
+            label: 'My team',
+            longLabel: myTeam.name,
+            icon: Users,
+          },
+        ]
+      : []),
     ...(isStaff ? [{ href: '/admin', label: 'Organizer', icon: Wrench }] : []),
     ...(isSuperAdmin ? [{ href: '/admin/system', label: 'System', icon: Wrench }] : []),
-  ];
+  ] as { href: string; label: string; longLabel?: string; icon: typeof Users }[];
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const signOut = () => logout.mutate(undefined, { onSettled: () => router.push('/login') });
@@ -82,7 +85,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh lg:flex">
       {/* ── Desktop rail ──────────────────────────────────────────────── */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface-1/60 px-3 py-4 lg:flex">
+      {/* z-40 is for what is inside: `position: sticky` always creates a
+          stacking context, so the notification panel's z-50 is ranked within
+          this element and cannot otherwise clear a positioned `.panel`. */}
+      <aside className="sticky top-0 z-40 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface-1/60 px-3 py-4 lg:flex">
         <div className="mb-6 flex items-center gap-2 px-2">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
             <Monogram size={26} />
@@ -107,7 +113,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               )}
             >
               <link.icon aria-hidden size={16} strokeWidth={1.5} />
-              {link.label}
+              <span className="truncate">{link.longLabel ?? link.label}</span>
             </Link>
           ))}
         </nav>

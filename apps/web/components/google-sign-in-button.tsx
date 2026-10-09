@@ -4,12 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api, apiUrl } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
-/// Where to come back to after the round trip through Google.
-///
-/// `sessionStorage`, not a query parameter threaded through Google: the value
-/// never leaves our origin, so it cannot be used to make our own callback
-/// redirect somewhere else. It survives the cross-site trip because the tab
-/// returns to the same origin it left, and it is read exactly once.
+/// `sessionStorage`, not a parameter threaded through Google: the value never
+/// leaves our origin, so it cannot redirect our own callback elsewhere.
 const RETURN_KEY = 'faceoff:oauth-return-to';
 
 export function rememberReturnTo(path: string): void {
@@ -30,21 +26,27 @@ export function takeReturnTo(): string | null {
   }
 }
 
-/// Which providers this deployment has credentials for.
-///
-/// Asked before rendering, so an environment without them shows a sign-in page
-/// with no dead button on it. Cached hard — it changes only on deploy.
+/// A deploy-time constant, so it can live in the bundle. Without it the button
+/// waits on a post-hydration fetch and arrives after the rest of the form.
+const BUILD_FLAG =
+  process.env.NEXT_PUBLIC_GOOGLE_SIGN_IN === 'true'
+    ? { google: true }
+    : process.env.NEXT_PUBLIC_GOOGLE_SIGN_IN === 'false'
+      ? { google: false }
+      : undefined;
+
 export function useAuthProviders() {
   return useQuery({
     queryKey: ['auth-providers'],
     queryFn: () => api<{ google: boolean }>('/auth/providers'),
+    // The API stays authoritative, so a wrong flag self-corrects.
+    placeholderData: BUILD_FLAG,
     staleTime: 60 * 60_000,
     retry: false,
   });
 }
 
-/// Google's mark. Inline so it is one request fewer, and it follows no theme —
-/// Google's brand guidance requires the four colours as published.
+/// Follows no theme: Google's brand guidance requires these four colours.
 function GoogleMark() {
   return (
     <svg aria-hidden width="17" height="17" viewBox="0 0 18 18" className="shrink-0">
@@ -68,15 +70,10 @@ function GoogleMark() {
   );
 }
 
-/// Sign in with Google.
+/// A plain `<a>`, not a fetch: the consent screen has to load as a top-level
+/// navigation so the viewer can see whose domain they are trusting.
 ///
-/// A plain `<a>`, deliberately not a fetch. The browser has to make a top-level
-/// navigation to Google so the consent screen loads in the address bar, where
-/// someone can see the domain they are trusting — an XHR could not show them
-/// that, and Google refuses to be framed.
-///
-/// Renders nothing when the provider is not configured, rather than a disabled
-/// button: a greyed-out "Sign in with Google" invites people to keep pressing it.
+/// Renders nothing when unconfigured, rather than a button that cannot work.
 export function GoogleSignInButton({
   returnTo,
   label = 'Continue with Google',

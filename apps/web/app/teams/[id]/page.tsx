@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
 import { Button } from '@/components/ui/button';
+import { TeamJoinRequests } from '@/components/team-join-requests';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -250,6 +251,14 @@ function TeamView({ id }: { id: string }) {
               )}
           </>
         }
+      />
+
+      {/* Above the invite code: a captain with people waiting should answer them
+          before reaching for the code. */}
+      <TeamJoinRequests
+        teamId={team.id}
+        competitionId={team.competitionId}
+        isCaptain={isCaptain}
       />
 
       {isMember && team.code && (

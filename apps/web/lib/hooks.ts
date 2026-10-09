@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { useToast } from '@/components/ui/toast';
 import type {
   Challenge,
   Competition,
@@ -10,8 +11,10 @@ import type {
   CurrentUser,
   Leaderboard,
   McqProgress,
+  MyTeam,
   NotificationPage,
   Profile,
+  TeamJoinRequest,
   RoundSummary,
   SubmissionDetail,
 } from './types';
@@ -180,14 +183,9 @@ export function useCountdown(target: string | null): {
 
 // ── Notifications ──────────────────────────────────────────────────────────
 //
-// Two queries, not one, and the split is the whole design.
-//
-// Every signed-in page renders the bell, so whatever it polls is the most
-// frequently requested route in the app. `unread-count` is one indexed COUNT
-// that returns a single integer; the list is rows, bodies and a second count.
-// Polling the cheap one on a timer and fetching the expensive one only when
-// somebody actually opens the panel is the difference between a background
-// heartbeat and a background load.
+// Two queries on purpose: every signed-in page renders the bell, so the timer
+// polls a single indexed COUNT and the rows are fetched only when the panel
+// is actually opened.
 
 const UNREAD_POLL_MS = 25_000;
 
@@ -338,5 +336,87 @@ export function useSendAnnouncement() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
+  });
+}
+
+// ── Team join requests ─────────────────────────────────────────────────────
+
+export function useTeamJoinRequests(teamId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['team-join-requests', teamId],
+    queryFn: () => api<TeamJoinRequest[]>(`/teams/${teamId}/join-requests`),
+    enabled: enabled && Boolean(teamId),
+    refetchInterval: 30_000,
+  });
+}
+
+/// Any of these can change the team list, the pending list and the team
+/// itself. `['team', teamId]` is the members list.
+function useRequestMutation<TVars>(
+  mutationFn: (vars: TVars) => Promise<unknown>,
+  competitionId?: string,
+  teamId?: string,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['team-join-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['teams', competitionId] });
+      void queryClient.invalidateQueries({ queryKey: ['my-team'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      if (teamId) void queryClient.invalidateQueries({ queryKey: ['team', teamId] });
+    },
+  });
+}
+
+export function useAskToJoin(competitionId: string) {
+  return useRequestMutation<{ teamId: string; message?: string }>(
+    ({ teamId, message }) =>
+      api(`/teams/${teamId}/join-requests`, { method: 'POST', body: { message } }),
+    competitionId,
+  );
+}
+
+export function useWithdrawJoinRequest(competitionId: string) {
+  return useRequestMutation<string>(
+    (teamId) => api(`/teams/${teamId}/join-requests/mine`, { method: 'DELETE' }),
+    competitionId,
+  );
+}
+
+
+export function useAnswerJoinRequest(competitionId?: string, teamId?: string) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  return useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean; name: string }) =>
+      api(`/teams/join-requests/${id}/${approve ? 'approve' : 'decline'}`, { method: 'POST' }),
+    onSuccess: (_data, { approve, name }) => {
+      toast.success(
+        approve ? `${name} joined the team` : `Declined ${name}`,
+        approve ? 'They can now score for this team.' : undefined,
+      );
+
+      void queryClient.invalidateQueries({ queryKey: ['team-join-requests'] });
+      void queryClient.invalidateQueries({ queryKey: ['teams', competitionId] });
+      void queryClient.invalidateQueries({ queryKey: ['my-team'] });
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      if (teamId) void queryClient.invalidateQueries({ queryKey: ['team', teamId] });
+    },
+  });
+}
+
+/// Every team the viewer is in, most relevant first.
+export function useMyTeams() {
+  const { data: user } = useCurrentUser();
+
+  return useQuery({
+    queryKey: ['my-teams'],
+    queryFn: () => api<MyTeam[]>('/teams/mine'),
+    enabled: Boolean(user),
+    staleTime: 60_000,
   });
 }

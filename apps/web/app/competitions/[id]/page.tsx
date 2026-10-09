@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { use } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAskToJoin, useWithdrawJoinRequest } from '@/lib/hooks';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,7 @@ import { api, ApiError } from '@/lib/api';
 import { useCompetition, useCountdown } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
 import { registrationGate } from '@/lib/registration';
-import type { RoundSummary, Team } from '@/lib/types';
+import type { RoundSummary, Team, TeamListItem } from '@/lib/types';
 
 function RoundCard({
   round,
@@ -89,14 +90,6 @@ function RoundCard({
   );
 }
 
-interface TeamListItem {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  captainId: string;
-  _count: { members: number };
-}
-
 function TeamPanel({
   competitionId,
   joined,
@@ -142,6 +135,9 @@ function TeamPanel({
     },
     onError: (err) => fail(err, 'Could not create the team'),
   });
+
+  const ask = useAskToJoin(competitionId);
+  const withdraw = useWithdrawJoinRequest(competitionId);
 
   const join = useMutation({
     mutationFn: (joinCode: string) =>
@@ -216,16 +212,54 @@ function TeamPanel({
                   </div>
                   {full ? (
                     <Badge>Full</Badge>
+                  ) : t.pendingRequest ? (
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      <Badge tone="brand" dot>
+                        Requested
+                      </Badge>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          withdraw.mutate(t.id, {
+                            onError: (err) => fail(err, 'Could not withdraw that request'),
+                          })
+                        }
+                        disabled={withdraw.isPending}
+                        className="text-[12px] text-ink-faint underline underline-offset-4 transition-colors hover:text-ink-dim disabled:opacity-50"
+                      >
+                        Withdraw
+                      </button>
+                    </span>
                   ) : (
-                    <span className="text-[12px] text-ink-faint">Ask for their code</span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="shrink-0"
+                      loading={ask.isPending && ask.variables?.teamId === t.id}
+                      onClick={() =>
+                        ask.mutate(
+                          { teamId: t.id },
+                          {
+                            onSuccess: () =>
+                              toast.success(
+                                'Request sent',
+                                `${t.captainName ?? 'The captain'} has been notified.`,
+                              ),
+                            onError: (err) => fail(err, 'Could not send that request'),
+                          },
+                        )
+                      }
+                    >
+                      Ask to join
+                    </Button>
                   )}
                 </li>
               );
             })}
           </ul>
-          <p className="mt-2.5 text-[13px] text-ink-faint">
-            Teams are joined by invite code rather than openly, so a captain controls who is on
-            their team.
+          <p className="mt-2.5 text-[13px] leading-relaxed text-ink-faint">
+            Ask a captain to let you in, or join straight away with an invite code they share
+            with you. Either way the captain decides who is on their team.
           </p>
         </div>
       )}

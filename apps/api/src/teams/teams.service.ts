@@ -6,10 +6,15 @@ import {
     Logger,
     NotFoundException,
 } from '@nestjs/common'
-import { CompetitionState, Prisma } from '@prisma/client'
+import { CompetitionState, Prisma, TeamJoinRequestStatus } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
-import { teamJoined } from '../notifications/notification-templates'
+import {
+    teamJoinRequested,
+    teamJoined,
+    teamRequestApproved,
+    teamRequestDeclined,
+} from '../notifications/notification-templates'
 import { generateTeamCode, normalizeTeamCode } from './team-code'
 import type { CreateTeamDto, JoinTeamDto } from './dto/team.dto'
 
@@ -76,8 +81,22 @@ export class TeamsService {
 
         if (!team) throw new NotFoundException('No team found with that code')
 
-        await this.assertJoinable(team.competitionId, userId)
-        await this.assertCapacity(team.competitionId, team.id)
+        await this.addMember(team, userId)
+        await this.settleJoin(team, userId)
+
+        return this.findOne(team.id, userId)
+    }
+
+    /// The only way anyone becomes a team member. Shared by `joinByCode` and by
+    /// an approved request, so the two doors cannot drift apart.
+    private async addMember(
+        team: { id: string; competitionId: string; name: string; captainId: string },
+        userId: string
+    ): Promise<void> {
+        this.assertCanJoin(
+            await this.loadJoinContext(team.competitionId, userId, team.id),
+            true
+        )
 
         try {
             await this.prisma.teamMember.create({
@@ -92,11 +111,28 @@ export class TeamsService {
             throw error
         }
 
-        // Only once the membership row exists, so the captain is never told
-        // about a join that the unique constraint then rejected.
-        await this.notifyCaptainOfJoin(team, userId)
+    }
 
-        return this.findOne(team.id, userId)
+    /// Side effects of a join, run together. Only reached once the membership
+    /// row exists, so the captain is never told about a rejected join.
+    private async settleJoin(
+        team: { id: string; competitionId: string; name: string; captainId: string },
+        userId: string
+    ): Promise<void> {
+        await Promise.all([
+            // Their requests to other teams in this competition can no longer
+            // succeed, so captains are not left answering them.
+            this.prisma.teamJoinRequest.updateMany({
+                where: {
+                    competitionId: team.competitionId,
+                    userId,
+                    status: TeamJoinRequestStatus.PENDING,
+                    teamId: { not: team.id },
+                },
+                data: { status: TeamJoinRequestStatus.WITHDRAWN, respondedAt: new Date() },
+            }),
+            this.notifyCaptainOfJoin(team, userId),
+        ])
     }
 
     /// Tells the captain that someone joined.
@@ -252,8 +288,10 @@ export class TeamsService {
         return withoutCode
     }
 
-    async listForCompetition(competitionId: string) {
-        return this.prisma.team.findMany({
+    /// Teams in a competition, with this viewer's own request state. Never
+    /// includes the join code — it is a bearer credential.
+    async listForCompetition(competitionId: string, viewerId: string) {
+        const teams = await this.prisma.team.findMany({
             where: { competitionId },
             orderBy: { createdAt: 'asc' },
             select: {
@@ -261,9 +299,66 @@ export class TeamsService {
                 name: true,
                 avatarUrl: true,
                 captainId: true,
+                captain: { select: { profile: { select: { displayName: true } } } },
                 _count: { select: { members: true } },
             },
         })
+
+        const pending = await this.prisma.teamJoinRequest.findMany({
+            where: {
+                competitionId,
+                userId: viewerId,
+                status: TeamJoinRequestStatus.PENDING,
+            },
+            select: { teamId: true },
+        })
+
+        const requested = new Set(pending.map((r) => r.teamId))
+
+        return teams.map(({ captain, ...team }) => ({
+            ...team,
+            captainName: captain?.profile?.displayName ?? null,
+            pendingRequest: requested.has(team.id),
+        }))
+    }
+
+    /// Every team this participant belongs to, most relevant first, so a caller
+    /// never has to guess which competition to ask about.
+    async myTeams(userId: string) {
+        const memberships = await this.prisma.teamMember.findMany({
+            where: {
+                userId,
+                team: { competition: { state: { not: CompetitionState.ARCHIVED } } },
+            },
+            orderBy: { joinedAt: 'desc' },
+            select: {
+                team: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatarUrl: true,
+                        competitionId: true,
+                        competition: { select: { name: true, state: true } },
+                    },
+                },
+            },
+        })
+
+        const rank: Partial<Record<CompetitionState, number>> = {
+            [CompetitionState.LIVE]: 0,
+            [CompetitionState.REGISTRATION]: 1,
+        }
+
+        return memberships
+            .map(({ team }) => ({
+                id: team.id,
+                name: team.name,
+                avatarUrl: team.avatarUrl,
+                competitionId: team.competitionId,
+                competitionName: team.competition.name,
+                competitionState: team.competition.state,
+            }))
+            .sort((a, b) => (rank[a.competitionState] ?? 9) - (rank[b.competitionState] ?? 9))
     }
 
     /// The requesting participant's team for a competition, or null. Used by the UI
@@ -275,6 +370,206 @@ export class TeamsService {
         })
 
         return membership ? this.findOne(membership.teamId, userId) : null
+    }
+
+    // ── Join requests ───────────────────────────────────────────────────────
+
+    /// Runs the same checks as joining, so a request that could never be
+    /// approved is refused at the point of asking.
+    async requestToJoin(teamId: string, userId: string, message?: string) {
+        const team = await this.prisma.team.findUnique({
+            where: { id: teamId },
+            select: { id: true, competitionId: true, name: true, captainId: true },
+        })
+
+        if (!team) throw new NotFoundException('Team not found')
+
+        const [context, existing] = await Promise.all([
+            this.loadJoinContext(team.competitionId, userId, team.id),
+            this.prisma.teamJoinRequest.findUnique({
+                where: { teamId_userId: { teamId, userId } },
+                select: { status: true },
+            }),
+        ])
+
+        this.assertCanJoin(context, true)
+
+        if (existing?.status === TeamJoinRequestStatus.PENDING) {
+            throw new ConflictException('You have already asked to join this team')
+        }
+
+        // Upsert rather than insert: the unique is on (teamId, userId), so
+        // asking again after a decline moves that row back to PENDING.
+        const request = await this.prisma.teamJoinRequest.upsert({
+            where: { teamId_userId: { teamId, userId } },
+            create: {
+                teamId,
+                userId,
+                competitionId: team.competitionId,
+                message: message?.trim() || null,
+            },
+            update: {
+                status: TeamJoinRequestStatus.PENDING,
+                message: message?.trim() || null,
+                createdAt: new Date(),
+                respondedAt: null,
+                respondedById: null,
+            },
+            select: { id: true, status: true, createdAt: true },
+        })
+
+        await this.notifyCaptainOfRequest(team, userId)
+
+        return request
+    }
+
+    /// Take back your own request. Only PENDING ones, and only your own.
+    async withdrawRequest(teamId: string, userId: string) {
+        const { count } = await this.prisma.teamJoinRequest.updateMany({
+            where: { teamId, userId, status: TeamJoinRequestStatus.PENDING },
+            data: { status: TeamJoinRequestStatus.WITHDRAWN, respondedAt: new Date() },
+        })
+
+        if (count === 0) throw new NotFoundException('No pending request to withdraw')
+
+        return { withdrawn: true }
+    }
+
+    /// Pending requests for a team. Captain only.
+    async listRequests(teamId: string, captainId: string) {
+        await this.requireCaptain(teamId, captainId)
+
+        return this.prisma.teamJoinRequest.findMany({
+            where: { teamId, status: TeamJoinRequestStatus.PENDING },
+            orderBy: { createdAt: 'asc' },
+            select: {
+                id: true,
+                createdAt: true,
+                message: true,
+                user: {
+                    select: {
+                        id: true,
+                        profile: { select: { displayName: true, avatarUrl: true, country: true } },
+                    },
+                },
+            },
+        })
+    }
+
+    /// Checks run at approval, not at request time: a team can fill up or the
+    /// requester can join elsewhere in between.
+    async approveRequest(requestId: string, captainId: string) {
+        const request = await this.requireAnswerableRequest(requestId, captainId)
+
+        await this.addMember(request.team, request.userId)
+
+        // Independent of each other, so one round trip instead of four.
+        await Promise.all([
+            this.prisma.teamJoinRequest.update({
+                where: { id: requestId },
+                data: {
+                    status: TeamJoinRequestStatus.APPROVED,
+                    respondedAt: new Date(),
+                    respondedById: captainId,
+                },
+            }),
+            this.settleJoin(request.team, request.userId),
+            this.notifyRequester(request.userId, request.team, true),
+        ])
+
+        // Not the full team: the caller refetches it anyway.
+        return { approved: true, teamId: request.team.id, userId: request.userId }
+    }
+
+    async declineRequest(requestId: string, captainId: string) {
+        const request = await this.requireAnswerableRequest(requestId, captainId)
+
+        // Guarded on PENDING so two captains — or a double-click — cannot both
+        // answer the same request.
+        const { count } = await this.prisma.teamJoinRequest.updateMany({
+            where: { id: requestId, status: TeamJoinRequestStatus.PENDING },
+            data: {
+                status: TeamJoinRequestStatus.DECLINED,
+                respondedAt: new Date(),
+                respondedById: captainId,
+            },
+        })
+
+        if (count === 0) throw new ConflictException('That request has already been answered')
+
+        await this.notifyRequester(request.userId, request.team, false)
+
+        return { declined: true, userId: request.userId }
+    }
+
+    /// Captaincy is checked against the request's OWN team, so captaining one
+    /// team is not authority over another's requests.
+    private async requireAnswerableRequest(requestId: string, captainId: string) {
+        const request = await this.prisma.teamJoinRequest.findUnique({
+            where: { id: requestId },
+            select: {
+                id: true,
+                userId: true,
+                status: true,
+                team: {
+                    select: { id: true, competitionId: true, name: true, captainId: true },
+                },
+            },
+        })
+
+        // 404 rather than 403 for someone else's request: a 403 would confirm
+        // the id exists.
+        if (!request || request.team.captainId !== captainId) {
+            throw new NotFoundException('Join request not found')
+        }
+
+        if (request.status !== TeamJoinRequestStatus.PENDING) {
+            throw new ConflictException('That request has already been answered')
+        }
+
+        return request
+    }
+
+    private async notifyCaptainOfRequest(
+        team: { id: string; name: string; captainId: string },
+        userId: string
+    ): Promise<void> {
+        try {
+            const profile = await this.prisma.profile.findUnique({
+                where: { userId },
+                select: { displayName: true },
+            })
+
+            await this.notifications.notifyUser(
+                team.captainId,
+                teamJoinRequested(team, { id: userId, label: profile?.displayName ?? 'Someone' })
+            )
+        } catch (error) {
+            this.logger.error(
+                `${userId} asked to join team ${team.id} but the captain was not notified: ${
+                    (error as Error).message
+                }`
+            )
+        }
+    }
+
+    private async notifyRequester(
+        userId: string,
+        team: { id: string; name: string; competitionId: string },
+        approved: boolean
+    ): Promise<void> {
+        try {
+            await this.notifications.notifyUser(
+                userId,
+                approved ? teamRequestApproved(team) : teamRequestDeclined(team)
+            )
+        } catch (error) {
+            this.logger.error(
+                `Request for team ${team.id} was answered but ${userId} was not notified: ${
+                    (error as Error).message
+                }`
+            )
+        }
     }
 
     private async requireCaptain(teamId: string, userId: string) {
@@ -313,11 +608,35 @@ export class TeamsService {
         }
     }
 
-    private async assertJoinable(competitionId: string, userId: string): Promise<void> {
-        const competition = await this.prisma.competition.findUnique({
-            where: { id: competitionId },
-            select: { id: true, state: true },
-        })
+    /// Everything the join rules need, in one round trip. Read in parallel and
+    /// asserted in memory — the database is ~370ms away, so five sequential
+    /// queries here was most of the wait on every join.
+    private async loadJoinContext(competitionId: string, userId: string, teamId?: string) {
+        const [competition, enrolled, existing, memberCount] = await Promise.all([
+            this.prisma.competition.findUnique({
+                where: { id: competitionId },
+                select: { id: true, state: true, maxTeamSize: true },
+            }),
+            this.prisma.competitionParticipant.findUnique({
+                where: { competitionId_userId: { competitionId, userId } },
+                select: { id: true },
+            }),
+            this.prisma.teamMember.findUnique({
+                where: { competitionId_userId: { competitionId, userId } },
+                select: { teamId: true },
+            }),
+            teamId ? this.prisma.teamMember.count({ where: { teamId } }) : Promise.resolve(0),
+        ])
+
+        return { competition, enrolled: Boolean(enrolled), existing, memberCount }
+    }
+
+    /// Pure, so the checks keep one readable order however the data was read.
+    private assertCanJoin(
+        ctx: Awaited<ReturnType<TeamsService['loadJoinContext']>>,
+        checkCapacity: boolean
+    ): void {
+        const { competition } = ctx
 
         if (!competition || competition.state === CompetitionState.DRAFT) {
             throw new NotFoundException('Competition not found')
@@ -330,38 +649,21 @@ export class TeamsService {
             throw new ForbiddenException('This competition has already finished')
         }
 
-        const enrolled = await this.prisma.competitionParticipant.findUnique({
-            where: { competitionId_userId: { competitionId, userId } },
-            select: { id: true },
-        })
-
-        if (!enrolled) {
+        if (!ctx.enrolled) {
             throw new ForbiddenException('Join the competition before joining a team')
         }
 
-        const existing = await this.prisma.teamMember.findUnique({
-            where: { competitionId_userId: { competitionId, userId } },
-            select: { teamId: true },
-        })
-
-        if (existing) {
+        if (ctx.existing) {
             throw new ConflictException('You are already in a team for this competition')
+        }
+
+        if (checkCapacity && competition.maxTeamSize && ctx.memberCount >= competition.maxTeamSize) {
+            throw new ForbiddenException(`This team is full (${competition.maxTeamSize} members)`)
         }
     }
 
-    private async assertCapacity(competitionId: string, teamId: string): Promise<void> {
-        const competition = await this.prisma.competition.findUnique({
-            where: { id: competitionId },
-            select: { maxTeamSize: true },
-        })
-
-        if (!competition?.maxTeamSize) return
-
-        const members = await this.prisma.teamMember.count({ where: { teamId } })
-
-        if (members >= competition.maxTeamSize) {
-            throw new ForbiddenException(`This team is full (${competition.maxTeamSize} members)`)
-        }
+    private async assertJoinable(competitionId: string, userId: string): Promise<void> {
+        this.assertCanJoin(await this.loadJoinContext(competitionId, userId), false)
     }
 
     /// Retries on a code collision rather than pre-checking, which would still race.

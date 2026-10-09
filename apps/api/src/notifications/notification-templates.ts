@@ -102,6 +102,54 @@ export function competitionOpenForRegistration(competition: {
   };
 }
 
+/// To the captain: somebody wants in.
+export function teamJoinRequested(
+  team: { id: string; name: string },
+  requester: { id: string; label: string },
+): NotificationTemplate {
+  return {
+    type: NotificationType.TEAM_JOIN_REQUEST,
+    title: `${requester.label} asked to join ${team.name}`,
+    body: 'Approve or decline the request on your team page.',
+    linkUrl: `/teams/${team.id}`,
+    metadata: { teamId: team.id, userId: requester.id },
+    // Re-asking after a decline is a new request and should be announced again,
+    // so this is keyed on neither.
+    dedupeKey: null,
+  };
+}
+
+export function teamRequestApproved(team: {
+  id: string;
+  name: string;
+}): NotificationTemplate {
+  return {
+    type: NotificationType.TEAM_REQUEST_APPROVED,
+    title: `You are in ${team.name}`,
+    body: 'Your request was approved. Team rounds now score through this team.',
+    linkUrl: `/teams/${team.id}`,
+    metadata: { teamId: team.id },
+    dedupeKey: null,
+  };
+}
+
+export function teamRequestDeclined(team: {
+  id: string;
+  name: string;
+  competitionId: string;
+}): NotificationTemplate {
+  return {
+    type: NotificationType.TEAM_REQUEST_DECLINED,
+    title: `${team.name} declined your request`,
+    body: 'You can ask another team, or create your own.',
+    // Back to the team list, which is where the next useful action is — the
+    // team's own page would be a dead end.
+    linkUrl: `/competitions/${team.competitionId}`,
+    metadata: { teamId: team.id },
+    dedupeKey: null,
+  };
+}
+
 export function announcement(
   title: string,
   body: string,

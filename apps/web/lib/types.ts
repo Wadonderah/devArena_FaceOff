@@ -318,3 +318,35 @@ export interface NotificationPage {
   /// Pass back as `?before=` for the next page. Null means this was the last.
   nextCursor: string | null;
 }
+
+/// A team as it appears in a competition's team list.
+export interface TeamListItem {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  captainId: string;
+  captainName: string | null;
+  /// Whether the viewer has already asked to join this one.
+  pendingRequest: boolean;
+  _count: { members: number };
+}
+
+export interface TeamJoinRequest {
+  id: string;
+  createdAt: string;
+  message: string | null;
+  user: {
+    id: string;
+    profile: { displayName: string; avatarUrl: string | null; country: string | null } | null;
+  };
+}
+
+/// A team the viewer belongs to, as returned by GET /teams/mine.
+export interface MyTeam {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  competitionId: string;
+  competitionName: string;
+  competitionState: CompetitionState;
+}

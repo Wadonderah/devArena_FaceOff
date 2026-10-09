@@ -13,6 +13,7 @@ const COMPETITION = { id: 'comp-1', state: CompetitionState.REGISTRATION, maxTea
 
 interface Overrides {
   competition?: unknown;
+  request?: unknown;
   profile?: unknown;
   enrolled?: unknown;
   existingMembership?: unknown;
@@ -27,6 +28,9 @@ function build(over: Overrides = {}) {
   const memberDelete = jest.fn().mockResolvedValue({});
   const teamUpdate = jest.fn().mockResolvedValue({});
   const teamDelete = jest.fn().mockResolvedValue({});
+  const requestUpsert = jest.fn().mockResolvedValue({ id: 'req-1', status: 'PENDING' });
+  const requestUpdate = jest.fn().mockResolvedValue({});
+  const requestUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
 
   const prisma = {
     competition: {
@@ -66,6 +70,13 @@ function build(over: Overrides = {}) {
       update: teamUpdate,
       delete: teamDelete,
     },
+    teamJoinRequest: {
+      findUnique: jest.fn().mockResolvedValue('request' in over ? over.request : null),
+      findMany: jest.fn().mockResolvedValue([]),
+      upsert: requestUpsert,
+      update: requestUpdate,
+      updateMany: requestUpdateMany,
+    },
   } as unknown as PrismaService;
 
   // Joining by code now notifies the captain. Stubbed rather than mocked at the
@@ -83,6 +94,9 @@ function build(over: Overrides = {}) {
     memberDelete,
     teamUpdate,
     teamDelete,
+    requestUpsert,
+    requestUpdate,
+    requestUpdateMany,
   };
 }
 
@@ -488,5 +502,279 @@ describe('TeamsService.joinByCode — captain notification', () => {
 
     await expect(service.joinByCode('user-2', { code: 'ABC234' })).rejects.toThrow(/full/i);
     expect(notifications.notifyUser).not.toHaveBeenCalled();
+  });
+});
+
+const TEAM = {
+  id: 'team-1',
+  competitionId: 'comp-1',
+  name: 'Phoenix',
+  captainId: 'captain-1',
+  members: [],
+};
+
+describe('TeamsService.requestToJoin', () => {
+  it('records a request and tells the captain', async () => {
+    const { service, requestUpsert, notifications } = build({ team: TEAM });
+
+    await service.requestToJoin('team-1', 'user-2', 'I know Python');
+
+    expect(requestUpsert).toHaveBeenCalled();
+    expect(notifications.notifyUser).toHaveBeenCalledWith(
+      'captain-1',
+      expect.objectContaining({ type: 'TEAM_JOIN_REQUEST' }),
+    );
+  });
+
+  // Refused at the point of asking rather than sitting in a captain's list as
+  // something that could never be approved.
+  it('refuses when the team is already full', async () => {
+    const { service, requestUpsert } = build({
+      team: TEAM,
+      competition: { ...COMPETITION, maxTeamSize: 3 },
+      memberCount: 3,
+    });
+
+    await expect(service.requestToJoin('team-1', 'user-2')).rejects.toThrow(/full/i);
+    expect(requestUpsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the requester has not joined the competition', async () => {
+    const { service, requestUpsert } = build({ team: TEAM, enrolled: null });
+
+    await expect(service.requestToJoin('team-1', 'user-2')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(requestUpsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses a second pending request for the same team', async () => {
+    const { service, requestUpsert } = build({ team: TEAM, request: { status: 'PENDING' } });
+
+    await expect(service.requestToJoin('team-1', 'user-2')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(requestUpsert).not.toHaveBeenCalled();
+  });
+
+  // The unique is on (teamId, userId), so asking again after a decline has to
+  // move that row back to PENDING rather than insert a second one.
+  it('lets someone ask again after being declined', async () => {
+    const { service, requestUpsert } = build({ team: TEAM, request: { status: 'DECLINED' } });
+
+    await service.requestToJoin('team-1', 'user-2');
+
+    expect(requestUpsert.mock.calls[0][0].update).toMatchObject({ status: 'PENDING' });
+  });
+
+  it('rejects an unknown team', async () => {
+    const { service } = build({ team: null });
+
+    await expect(service.requestToJoin('nope', 'user-2')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('TeamsService join request authorization', () => {
+  const pending = {
+    id: 'req-1',
+    userId: 'user-2',
+    status: 'PENDING',
+    team: TEAM,
+  };
+
+  it('lets only the captain list requests', async () => {
+    const { service } = build({ team: { id: 'team-1', captainId: 'captain-1' } });
+
+    await expect(service.listRequests('team-1', 'someone-else')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  // Captaincy is checked against the request's OWN team, so captaining one team
+  // is not authority over another team's requests.
+  it('refuses a captain answering another team\u2019s request', async () => {
+    const { service, memberCreate } = build({ request: pending });
+
+    await expect(service.approveRequest('req-1', 'captain-of-other-team')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(memberCreate).not.toHaveBeenCalled();
+  });
+
+  // 404 rather than 403: a 403 would confirm the id exists.
+  it('reports a foreign request as missing rather than forbidden', async () => {
+    const { service } = build({ request: pending });
+
+    await expect(service.declineRequest('req-1', 'intruder')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('refuses to answer a request twice', async () => {
+    const { service } = build({ request: { ...pending, status: 'APPROVED' } });
+
+    await expect(service.approveRequest('req-1', 'captain-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});
+
+describe('TeamsService.approveRequest', () => {
+  const pending = { id: 'req-1', userId: 'user-2', status: 'PENDING', team: TEAM };
+
+  it('adds the member and tells them', async () => {
+    const { service, prisma, memberCreate, notifications } = build({ request: pending });
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(TEAM);
+
+    await service.approveRequest('req-1', 'captain-1');
+
+    expect(memberCreate).toHaveBeenCalledWith({
+      data: { teamId: 'team-1', userId: 'user-2', competitionId: 'comp-1' },
+    });
+    expect(notifications.notifyUser).toHaveBeenCalledWith(
+      'user-2',
+      expect.objectContaining({ type: 'TEAM_REQUEST_APPROVED' }),
+    );
+  });
+
+  // Capacity is re-checked at approval, not at request time: a team can fill up
+  // in between, and approving anyway would over-fill a capped team.
+  it('refuses to over-fill a team that filled up after the request', async () => {
+    const { service, memberCreate, requestUpdate } = build({
+      request: pending,
+      competition: { ...COMPETITION, maxTeamSize: 3 },
+      memberCount: 3,
+    });
+
+    await expect(service.approveRequest('req-1', 'captain-1')).rejects.toThrow(/full/i);
+    expect(memberCreate).not.toHaveBeenCalled();
+    // The request stays PENDING, so the captain can see it was not actioned.
+    expect(requestUpdate).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the requester joined another team in the meantime', async () => {
+    const { service, memberCreate } = build({
+      request: pending,
+      existingMembership: { teamId: 'team-9' },
+    });
+
+    await expect(service.approveRequest('req-1', 'captain-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(memberCreate).not.toHaveBeenCalled();
+  });
+
+  // Otherwise captains are left answering requests that can only fail.
+  it('withdraws the requester\u2019s other pending requests once they are in', async () => {
+    const { service, prisma, requestUpdateMany } = build({ request: pending });
+    (prisma.team.findUnique as jest.Mock).mockResolvedValue(TEAM);
+
+    await service.approveRequest('req-1', 'captain-1');
+
+    expect(requestUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'user-2',
+          status: 'PENDING',
+          teamId: { not: 'team-1' },
+        }),
+        data: expect.objectContaining({ status: 'WITHDRAWN' }),
+      }),
+    );
+  });
+});
+
+describe('TeamsService.declineRequest', () => {
+  const pending = { id: 'req-1', userId: 'user-2', status: 'PENDING', team: TEAM };
+
+  it('declines and tells the requester', async () => {
+    const { service, notifications } = build({ request: pending });
+
+    await expect(service.declineRequest('req-1', 'captain-1')).resolves.toMatchObject({
+      declined: true,
+    });
+    expect(notifications.notifyUser).toHaveBeenCalledWith(
+      'user-2',
+      expect.objectContaining({ type: 'TEAM_REQUEST_DECLINED' }),
+    );
+  });
+
+  // Guarded on PENDING in the where clause, so a double-click cannot decline
+  // something already answered.
+  it('refuses when the row was answered concurrently', async () => {
+    const { service, requestUpdateMany } = build({ request: pending });
+    requestUpdateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.declineRequest('req-1', 'captain-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});
+
+describe('TeamsService.withdrawRequest', () => {
+  it('withdraws only a pending request, and only your own', async () => {
+    const { service, requestUpdateMany } = build();
+
+    await service.withdrawRequest('team-1', 'user-2');
+
+    expect(requestUpdateMany).toHaveBeenCalledWith({
+      where: { teamId: 'team-1', userId: 'user-2', status: 'PENDING' },
+      data: { status: 'WITHDRAWN', respondedAt: expect.any(Date) },
+    });
+  });
+
+  it('reports nothing to withdraw', async () => {
+    const { service, requestUpdateMany } = build();
+    requestUpdateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.withdrawRequest('team-1', 'user-2')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+});
+
+describe('TeamsService.listForCompetition', () => {
+  // The code is a bearer credential: anyone holding it can join, so it must not
+  // appear in a list every authenticated caller can read.
+  it('never includes the join code', async () => {
+    const { service, prisma } = build();
+    (prisma.team.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'team-1',
+        name: 'Phoenix',
+        avatarUrl: null,
+        captainId: 'captain-1',
+        captain: { profile: { displayName: 'Ada' } },
+        _count: { members: 2 },
+      },
+    ]);
+
+    const [team] = await service.listForCompetition('comp-1', 'viewer-1');
+
+    expect(team).not.toHaveProperty('code');
+    expect(team.captainName).toBe('Ada');
+    expect(team.pendingRequest).toBe(false);
+  });
+
+  it('marks the teams this viewer has already asked', async () => {
+    const { service, prisma } = build();
+    (prisma.team.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'team-1',
+        name: 'Phoenix',
+        avatarUrl: null,
+        captainId: 'c1',
+        captain: null,
+        _count: { members: 1 },
+      },
+    ]);
+    (prisma.teamJoinRequest.findMany as jest.Mock).mockResolvedValue([{ teamId: 'team-1' }]);
+
+    const [team] = await service.listForCompetition('comp-1', 'viewer-1');
+
+    expect(team.pendingRequest).toBe(true);
+    expect(team.captainName).toBeNull();
   });
 });
