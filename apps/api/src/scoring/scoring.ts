@@ -1,5 +1,4 @@
-/// Pure scoring functions. No database, no request context — the competition's
-/// arithmetic lives here alone so it can be reasoned about and tested directly.
+/// Pure scoring arithmetic. No database, no request context.
 
 export interface RoundContribution {
   roundId: string;
@@ -8,28 +7,18 @@ export interface RoundContribution {
   weight: number;
 }
 
-/// Grades one MCQ answer.
-///
-/// `negativeMarking` is the penalty for a wrong answer, and exists to discourage
-/// blind guessing on a four-option question where a guess is worth 25% for free.
-///
-/// The result is clamped at zero: a participant should never end a question
-/// worse off than not answering it, because that turns the round into a game of
-/// nerve rather than knowledge. Round-level totals are separately floored in
-/// normalizeRound().
+/// Grades one MCQ answer. Clamped at zero so a participant is never worse off
+/// than not answering; round totals are floored separately in normalizeRound().
 export function gradeMcq(isCorrect: boolean, points: number, negativeMarking = 0): number {
   if (isCorrect) return points;
 
   const penalty = Math.min(Math.abs(negativeMarking), points);
 
-  // Returned explicitly rather than as -penalty: negating zero yields -0, which
-  // survives into JSON and the database as "-0" and reads as a bug.
+  // Not `-penalty`: negating zero yields -0, which survives into JSON.
   return penalty === 0 ? 0 : -penalty;
 }
 
-/// Coding challenges award partial credit by weighted test cases. A solution
-/// passing three of four equally weighted tests earns 75% of the points, which
-/// is fairer for a learning-focused pilot than all-or-nothing.
+/// Partial credit by weighted test cases: three of four equal tests earns 75%.
 export function gradeCoding(
   passedWeight: number,
   totalWeight: number,
@@ -40,12 +29,11 @@ export function gradeCoding(
   return round4(ratio * points);
 }
 
-/// A single challenge's contribution to the final score.
+/// A challenge's contribution to the final score.
 ///
-/// Dividing by the round's total available points rather than the challenge's own
-/// makes these values additive: summing every event in a round yields exactly
-/// (roundRaw / roundMax) x weight, and summing across rounds yields the final
-/// score. Without that, per-challenge weighted values would overcount.
+/// The denominator is the ROUND's total points, not the challenge's own — that
+/// is what makes these additive, so summing events gives exactly
+/// (roundRaw / roundMax) x weight. Using the challenge max overcounts.
 export function weightedContribution(
   rawScore: number,
   roundMaxPoints: number,
@@ -57,9 +45,8 @@ export function weightedContribution(
 
 export function normalizeRound(rawScore: number, maxRawScore: number): number {
   if (maxRawScore <= 0) return 0;
-  // Floored at zero as well as capped at one: with negative marking a round's
-  // raw total can go below zero, and a negative round score would subtract from
-  // a participant's other rounds.
+  // Floored as well as capped: negative marking can take a round's raw total
+  // below zero, which would subtract from the participant's other rounds.
   return round6(Math.min(Math.max(rawScore / maxRawScore, 0), 1));
 }
 

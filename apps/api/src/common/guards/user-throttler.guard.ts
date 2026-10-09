@@ -4,35 +4,24 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import type { Request } from 'express';
 import type { AuthenticatedUser } from '../decorators';
 
-/// The named throttler that is keyed per (IP, email) rather than per IP.
-///
-/// Public auth routes cannot key by user — there is no user yet — and keying
-/// them by IP alone meant a whole venue behind one NAT shared one bucket: the
-/// sixth person to sign in within fifteen minutes was refused. Keying by
-/// IP + email gives each account its own bucket at that IP, while a second,
-/// looser IP-only throttler on the same route still caps an attacker who
-/// rotates emails from one address.
+/// Keyed per (IP, email), for public auth routes where there is no user yet.
+/// IP alone would give a whole venue behind one NAT a single bucket. A looser
+/// IP-only throttler on the same route still caps rotating emails.
 export const ACCOUNT_THROTTLER = 'account';
 
-/// Authenticated traffic is tracked per user rather than per IP. Without this a
-/// whole venue behind one NAT — exactly the pilot's setup — shares a single
-/// bucket, and one participant's submissions would rate-limit everyone else.
+/// Tracks authenticated traffic per user, not per IP: a venue behind one NAT
+/// would otherwise let one participant rate-limit everybody else.
 @Injectable()
 export class UserThrottlerGuard extends ThrottlerGuard {
   protected async getTracker(req: Request & { user?: AuthenticatedUser }): Promise<string> {
     if (req.user?.id) return `user:${req.user.id}`;
     if (req.ip) return `ip:${req.ip}`;
 
-    // The old fallback was the literal 'unknown', which is a single shared
-    // bucket: every caller Express could not resolve an address for counted
-    // against the same limit, so a handful of them could lock each other out
-    // for reasons none of them could see. A per-request value cannot be
-    // rate-limited collectively, which is the safer failure — the request still
-    // passes through every other guard, and an address-less caller is rare
-    // enough that the lost protection is not worth the shared lockout.
+    // Per-request, so address-less callers cannot collectively lock each other
+    // out of a shared bucket. They still pass through every other guard.
     //
-    // Prefixes also keep the namespaces apart: without them a user whose id
-    // happened to equal an IP string would share that IP's bucket.
+    // The prefixes matter: without them a user id equal to an IP string would
+    // share that IP's bucket.
     return `unresolved:${randomUUID()}`;
   }
 
@@ -42,8 +31,7 @@ export class UserThrottlerGuard extends ThrottlerGuard {
     const req = context.switchToHttp().getRequest<Request>();
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
 
-    // Lower-cased so `Ama@…` and `ama@…` share a bucket — the DTO normalises the
-    // same way, so this matches what the account lookup will see.
+    // Lower-cased to match the DTO, so `Ama@…` and `ama@…` share a bucket.
     return super.generateKey(context, `${suffix}:${email}`, name);
   }
 }

@@ -129,24 +129,14 @@ enum VerificationTokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
 
-  /// A one-time code handed to the browser after a Google sign-in.
-  ///
-  /// Exists because both auth cookies are SameSite=Strict, and a Strict cookie
-  /// set on the response to a cross-site navigation — which is exactly what
-  /// Google's redirect back to us is — is not stored by the browser. So the
-  /// callback cannot sign anyone in. It issues one of these instead and
-  /// redirects to a page on our own origin, which exchanges it same-site for
-  /// the real cookies.
+  /// A one-time code handed to the browser after a Google sign-in, because both
+  /// auth cookies are SameSite=Strict and so cannot be set on the response to
+  /// Google's cross-site redirect. Exchanged same-site for the real cookies.
   OAUTH_EXCHANGE
 }
 
-/// Why a participant was notified.
-///
-/// The type drives the icon and the grouping in the UI, so it is an enum rather
-/// than a free string: a typo in a caller would otherwise reach the bell as an
-/// unstyled row. The three TEAM_REQUEST* members are not used yet — the team
-/// join-request flow lands next — but they are declared here so that item needs
-/// no second migration to alter this type.
+/// The TEAM_REQUEST* members are declared ahead of the join-request flow, so
+/// that work needs no migration to alter this type.
 enum NotificationType {
   ANNOUNCEMENT
 
@@ -174,13 +164,9 @@ model User {
   id    String @id @default(uuid()) @db.Uuid
   email String @unique
 
-  /// Null for an account that has only ever signed in with a provider.
-  ///
-  /// Widening this is what makes Google sign-in possible without inventing a
-  /// fake password nobody knows. Every read of it now has to handle null —
-  /// notably `login`, which must still answer identically for "no password set"
-  /// and "wrong password", or it becomes an oracle for which accounts are
-  /// Google-only.
+  /// Null for a provider-only account. Every read must handle null — notably
+  /// `login`, which has to answer identically for "no password set" and "wrong
+  /// password", or it becomes an oracle for which accounts are Google-only.
   passwordHash String?
 
   role          Role    @default(PARTICIPANT)
@@ -723,52 +709,35 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-/// One delivered notification, per recipient.
-///
-/// Fanned out at write time rather than computed on read: a round starting is
-/// one event but fifty rows, and storing them that way is what lets each
-/// participant mark their own copy read without affecting anyone else. The
-/// alternative — an events table plus a per-user read cursor — cannot express
-/// "read the third one but not the second".
-///
-/// Shaped on AuditLog, which is the existing side table: `@db.Uuid` keys,
-/// `metadata Json?` for the type-specific extras, plural snake_case `@@map`.
+/// One delivered notification, per recipient. Fanned out at write time so each
+/// recipient can mark their own copy read — an events table plus a read cursor
+/// cannot express "read the third one but not the second".
 model Notification {
   id     String           @id @default(uuid()) @db.Uuid
   userId String           @db.Uuid
   type   NotificationType
 
-  /// Rendered verbatim. Both are written by the server from server-side state,
-  /// never echoed from a request body, so neither can carry a participant's
-  /// text into another participant's bell.
+  /// Rendered verbatim, and written by the server from server-side state —
+  /// never echoed from a request body into another participant's bell.
   title String
   body  String
 
-  /// Where clicking the row goes, as an app-relative path such as
-  /// `/rounds/<id>`. Relative by constraint, not convention: the frontend
-  /// refuses anything else, so a stored absolute URL cannot turn the bell into
-  /// an open redirect.
+  /// App-relative path. The frontend refuses anything else, so a stored
+  /// absolute URL cannot turn the bell into an open redirect.
   linkUrl String?
 
-  /// Type-specific extras — `roundId`, `teamId`, `submissionId`. Deliberately
-  /// not used for anything the UI must have: a row has to render correctly from
-  /// `title`, `body` and `linkUrl` alone.
+  /// Type-specific extras. Never load-bearing — a row must render from `title`,
+  /// `body` and `linkUrl` alone.
   metadata Json?
 
-  /// Null until read. Nullable rather than a boolean so "when" is recoverable,
-  /// and so the unread index below stays small as the table grows.
+  /// Null until read. Nullable rather than a boolean so "when" is recoverable.
   readAt DateTime?
 
-  /// Idempotency key for fan-out, scoped per user, null for anything that may
-  /// legitimately repeat.
-  ///
-  /// A round that is paused and resumed transitions to LIVE twice, and an
-  /// organizer correcting scores reopens and recloses a finished round. Without
-  /// this, each of those sends every participant a duplicate. With it, the
-  /// fan-out is `createMany({ skipDuplicates: true })` and the second attempt
-  /// writes nothing. Postgres treats NULLs as distinct in a unique index, so
-  /// announcements — which have no key and should never be collapsed — are
-  /// unaffected.
+  /// Idempotency key for fan-out, null for anything that may legitimately
+  /// repeat. A paused round transitions to LIVE twice and a corrected one
+  /// recloses, and without this each sends a duplicate. Paired with
+  /// `createMany({ skipDuplicates: true })`; Postgres treats NULLs as distinct,
+  /// so keyless announcements are never collapsed.
   dedupeKey String?
 
   createdAt DateTime @default(now())
@@ -776,40 +745,33 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dedupeKey])
-  /// Serves the unread badge: `userId = ? AND readAt IS NULL`.
+  /// The unread badge: `userId = ? AND readAt IS NULL`.
   @@index([userId, readAt])
-  /// Serves the list, which is always this user's newest first. The index above
-  /// cannot do it as well — `readAt` sits between the two columns the query
-  /// needs, so it could not be used to satisfy the sort.
+  /// The list, newest first. The index above cannot serve it — `readAt` sits
+  /// between the two columns the sort needs.
   @@index([userId, createdAt])
   @@map("notifications")
 }
 
-/// A provider identity linked to an account.
-///
-/// Separate from User rather than a pair of columns on it, so one account can
-/// hold several providers later without another migration, and so the unique
-/// below can do the work that matters.
+/// A provider identity linked to an account. Its own table so an account can
+/// hold several providers later, and so the uniques below can be expressed.
 model OAuthAccount {
   id     String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid
 
   provider OAuthProvider
 
-  /// Google's `sub`. Stable for the lifetime of the Google account and never
-  /// reused, which is why the link is keyed on this and not on the email — a
-  /// Google user can change their email address, and someone else can later be
-  /// issued the one they gave up.
+  /// Google's `sub`: stable and never reused. The link is keyed on this, not
+  /// the email, because an address can change hands.
   providerAccountId String
 
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  /// One provider identity maps to exactly one account. This is the constraint
-  /// that stops two of our users claiming the same Google identity.
+  /// Stops two accounts claiming the same provider identity.
   @@unique([provider, providerAccountId])
-  /// One account holds at most one identity per provider.
+  /// One identity per provider per account.
   @@unique([userId, provider])
   @@map("oauth_accounts")
 }

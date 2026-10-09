@@ -10,29 +10,10 @@ const STAFF_LABEL: Record<string, string> = {
   SUPER_ADMIN: 'Administrator',
 };
 
-/// The dashboard's identity line.
+/// The dashboard's identity line: avatar and name only.
 ///
-/// Three rewrites, and the reasons are worth keeping because each was a
-/// different mistake.
-///
-/// First it replaced a heading reading `displayName ? 'Welcome back, X' :
-/// 'Dashboard'`. `useProfile` resolves after the query AuthGate waits on, so
-/// for a few hundred milliseconds the page said "Dashboard" and then swapped to
-/// a name — a visible flicker on every load.
-///
-/// Then the greeting went: "Welcome back" is the register of a newsletter, not
-/// of a competition whose next screen is a timed round, and at `text-3xl` it was
-/// the largest thing on a page whose subject is the competition below it.
-///
-/// Now the duplication has gone too. This showed an avatar, a name, the role
-/// and the email — and the rail two inches to the left already showed the
-/// avatar, the email and the role. Three of the four facts were on screen
-/// twice, which is why it read as filler.
-///
-/// What is left is the one thing the rail does not show: who you are, by name.
-/// The role survives only for staff, where it is genuine context — "you are
-/// looking at this as an organizer" — and is noise for the participants who are
-/// most of the users.
+/// The sidebar already shows the avatar, email and role, so anything more here
+/// is duplication. The role label is kept for staff, where it is real context.
 export function ProfileHeader({ className }: { className?: string }) {
   const { data: user } = useCurrentUser();
   const { data: profile, isLoading } = useProfile();
@@ -45,7 +26,7 @@ export function ProfileHeader({ className }: { className?: string }) {
       <Avatar name={displayName ?? user?.email} src={profile?.profile?.avatarUrl} size={30} />
 
       {isLoading ? (
-        // Same box as the rendered line, so nothing shifts when it arrives.
+        // Same box as the line it replaces, so the layout does not shift.
         <Skeleton className="h-[1.05rem] w-36 rounded" />
       ) : (
         <h1 className="min-w-0 truncate text-[15px] font-medium leading-tight text-ink">

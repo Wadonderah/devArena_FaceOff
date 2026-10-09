@@ -2,19 +2,13 @@ import type { CompetitionState } from './types';
 
 /// Can this participant enrol, and if not, why?
 ///
-/// "Open for registration" means two independent things, and nothing made that
-/// visible until a participant hit it: the lifecycle `state`, which an organizer
-/// sets by hand, and the `registrationOpensAt`/`ClosesAt` window, which is a
-/// clock. A competition can sit in REGISTRATION with its window a week away, and
-/// then the badge says "Registration" while the server refuses every join.
+/// "Open for registration" is two independent things that can disagree: the
+/// lifecycle `state` an organizer sets, and the `registrationOpensAt`/`ClosesAt`
+/// clock. A competition can sit in REGISTRATION with its window a week away, so
+/// keying a Join button on `state` alone offers one the server will refuse.
 ///
-/// The Join button was keyed on `state` alone, so it was offered in exactly that
-/// case and failed on press. Offering an action that cannot succeed is the same
-/// mistake as the dead "Ask for their code" label.
-///
-/// Mirrors the order of checks in CompetitionsService.join. The server stays
-/// authoritative — this only decides what to render, so a clock skew shows the
-/// wrong label for a moment rather than letting anyone in early.
+/// Mirrors the order of checks in CompetitionsService.join, which stays
+/// authoritative — this only decides what to render.
 export type RegistrationGate =
   | { joinable: true; detail: null }
   | { joinable: false; reason: 'finished' | 'draft' | 'not-open' | 'closed'; detail: string };
@@ -43,8 +37,7 @@ export function registrationGate(
 
   const opensAt = registrationOpensAt ? new Date(registrationOpensAt) : null;
   if (opensAt && now < opensAt.getTime()) {
-    // Names the moment. "Registration has not opened yet" left a participant
-    // with nothing to do and no idea whether to wait five minutes or a week.
+    // Names the moment, so the reader knows whether to wait minutes or a week.
     return {
       joinable: false,
       reason: 'not-open',
@@ -64,11 +57,8 @@ export function registrationGate(
   return { joinable: true, detail: null };
 }
 
-/// "15 Oct at 09:43", in the reader's own timezone.
-///
-/// The stored value is UTC and participants are not, so a raw ISO string would
-/// be read off by an hour or more. The year is included only when it is not the
-/// current one, because "15 Oct 2026" is noise in 2026.
+/// "15 Oct at 09:43", in the reader's own timezone — the stored value is UTC.
+/// The year appears only when it is not the current one.
 function formatWhen(date: Date, now: Date = new Date()): string {
   const sameYear = date.getFullYear() === now.getFullYear();
 

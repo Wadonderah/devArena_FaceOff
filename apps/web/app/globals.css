@@ -1,13 +1,9 @@
 @import 'tailwindcss';
 
 /*
-  Design tokens, sourced from akwannya-hub.org's own compiled stylesheet:
-  teal #2d938c (the parent site's focus-ring colour) over navy, with orange
-  #fc7606 as the single accent.
-
-  @theme declares the DARK values, which are also the defaults. The light theme
-  below re-points the same custom properties, so every component follows without
-  a single conditional class — a component never asks which theme is active.
+  Design tokens from akwannya-hub.org: teal #2d938c over navy, orange #fc7606
+  as the accent. @theme declares the DARK values; the light theme re-points the
+  same properties, so no component asks which theme is active.
 */
 @theme {
   /* Navy surfaces, matching the dark gradient sections on akwannya-hub.org. */
@@ -30,21 +26,10 @@
   --color-brand-deep: #0a7c78;
   --color-brand-dim: #086560;
 
-  /* Orange has exactly two jobs, and keeping them apart is what stops the
-     second one weakening the first:
-
-       1. STATE — "happening now". Only ever on a badge or a status marker, and
-          always with motion (a ping, a pulse). This is the meaning that has to
-          survive.
-       2. BRAND — the second half of the face-off mark. Only ever structural: a
-          panel edge, the monogram's right chevron. Never a badge, never text,
-          never a number.
-
-     This note used to say orange was reserved for (1) alone. It was, and the
-     result was that on any page without a live round half the brand was absent
-     — the logo is two colours meeting at a divider, and only one of them ever
-     appeared. A rule at the top of a panel cannot be mistaken for a status, so
-     (2) costs (1) nothing. */
+  /* Orange has two jobs, kept apart so the second does not weaken the first:
+       STATE  "happening now" — badges and status markers only, always with motion.
+       BRAND  the second half of the face-off mark — structural only: a panel
+              edge, the monogram. Never a badge, text or number. */
   --color-live: #fc7606;
   --color-live-soft: #fda85c;
 
@@ -55,23 +40,8 @@
   --color-warn: #fda85c;
   --color-danger: #dc2626;
 
-  /*
-    Podium metals, used by the leaderboard and nowhere else.
-
-    Three places needed distinguishing and the code was reaching for whatever
-    was nearest: first took `warn`, second `ink-dim`, and third took `live` —
-    the one colour that is supposed to mean "a round is running right now". A
-    third-place rank number glowing in the live colour is exactly the kind of
-    borrowing that makes a status colour stop meaning anything.
-
-    These are muted on purpose. Saturated metals against a navy surface read as
-    a toy; at this chroma they still say gold, silver and bronze while sitting
-    in the same world as the rest of the palette.
-
-    Declared as `--color-*` so Tailwind generates real utilities for them:
-    anything else is a bare custom property, and `bg-medal-gold/15` — which the
-    podium needs — would not exist.
-  */
+  /* Podium metals, leaderboard only. Declared as --color-* so Tailwind emits
+     utilities for them; muted because saturated metals on navy read as a toy. */
   --color-medal-gold: #e0b252;
   --color-medal-silver: #aab6c6;
   --color-medal-bronze: #bf7f4f;
@@ -81,23 +51,10 @@
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', monospace;
 
   /*
-    Fluid type scale.
-
-    These redefine what `text-lg` … `text-3xl` MEAN, rather than asking ~47 call
-    sites across 18 files to each remember a responsive variant. Tailwind's
-    defaults are fixed pixel sizes, so a heading set for a 1440px layout arrived
-    at the same size on a 390px phone and swamped it.
-
-    Desktop is deliberately unchanged — the max of every clamp is Tailwind's
-    original value — so this only ever shrinks small viewports:
-
-      token      390px        1440px
-      text-lg    16 (was 18)  18
-      text-xl    17 (was 20)  20
-      text-2xl   20 (was 24)  24
-      text-3xl   24 (was 30)  30
-
-    The landing page sets its own explicit clamps and is unaffected.
+    Fluid type scale. Redefines what `text-lg`…`text-3xl` MEAN rather than
+    asking ~47 call sites to remember a responsive variant. Every clamp's max
+    is Tailwind's original, so this only ever shrinks small viewports:
+    at 390px text-lg 16, text-xl 17, text-2xl 20, text-3xl 24.
   */
   --text-lg: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
   --text-xl: clamp(1.0625rem, 0.98rem + 0.4vw, 1.25rem);
@@ -105,27 +62,10 @@
   --text-3xl: clamp(1.5rem, 1.25rem + 1.1vw, 1.875rem);
 
   /*
-    Radius scale, deliberately tight.
-
-    This replaced eight different radii spread from 6px to 24px, which was not a
-    system but an accumulation — and the large end of it was the single thing
-    making the app read as generated. Big uniform corners on every surface are a
-    template signature; restraint and hierarchy are not.
-
-    Tailwind's own steps are redefined rather than avoided, so the ~110 existing
-    `rounded-*` classes all tighten at once instead of each file being edited and
-    one inevitably being missed.
-
-      token         was    now
-      rounded-sm     2px    3px
-      rounded-md     6px    4px
-      rounded-lg     8px    6px
-      rounded-xl    12px    8px
-      rounded-2xl   16px   10px
-      rounded-3xl   24px   12px
-
-    `rounded-full` stays, but only where a shape is genuinely a circle or a pill:
-    status dots, spinners, avatars, progress tracks and badges. Not buttons.
+    Radius scale. Redefines Tailwind's own steps so the ~110 existing
+    `rounded-*` classes all tighten at once: sm 3, md 4, lg 6, xl 8, 2xl 10,
+    3xl 12. `rounded-full` is for shapes that are genuinely round — dots,
+    spinners, avatars, progress tracks, badges. Not buttons.
   */
   --radius-sm: 3px;
   --radius-md: 4px;
@@ -168,13 +108,8 @@
   --arena-dust: rgba(199, 210, 232, 0.9);
 }
 
-/*
-  Light theme. Applied by [data-theme="light"] on <html>, set before first paint
-  by the inline script in layout.tsx so there is no flash of the wrong theme.
-
-  The brand darkens from #2d938c to #0a7c78 here: the mid teal only reaches about
-  3.4:1 against white, which fails text contrast. The deep teal clears 4.5:1.
-*/
+/* Light theme. Applied by [data-theme="light"] on <html>, set before first
+   paint by the inline script in layout.tsx so there is no flash. */
 [data-theme='light'] {
   --color-surface-0: #f4f6fb;
   --color-surface-1: #ffffff;
@@ -253,29 +188,12 @@
   }
 
   /*
-    One flat fill, and nothing else.
-
-    This carried three stacked gradients — a teal key light from the top right,
-    a warm counter-light from the bottom left, and a vertical fade from
-    #0a1024 down to the base surface — plus an SVG film grain over the top. The
-    reasoning recorded here was that an even dark fill "reads as generic".
-
-    That was wrong, and the giveaway is that every application the product is
-    measured against does the opposite: one dark surface, no gradient. The
-    reason is not fashion. An application page is a stack of panels, tables and
-    forms, each of which has its own surface a step lighter than the page. When
-    the page itself changes value from top to bottom, those panels disagree with
-    their own background by a different amount at the top of a scroll than at
-    the bottom, and the whole interface reads as faintly uneven — which is
-    exactly how it was described: a gradient you can detect but not point at.
-
-    Depth now comes only from the surface ladder (surface-0 for the page,
-    surface-1 for a panel, upward from there), which is consistent at every
-    scroll position.
-
-    The landing page is unaffected and keeps the atmosphere: `.sky` below is
-    `position: fixed; inset: 0` with its own gradients and its own grain, so it
-    never depended on this layer at all.
+    One flat fill, no gradient. An application page is a stack of panels each a
+    step lighter than the page; when the page itself changes value top to bottom
+    those panels disagree with their background by a different amount at every
+    scroll position, which reads as a faint unevenness. Depth comes from the
+    surface ladder instead. The landing page is unaffected — `.sky` below is
+    fixed and self-contained.
   */
   body {
     position: relative;
@@ -286,12 +204,8 @@
     min-height: 100dvh;
   }
 
-  /*
-    Display type is set lighter and tighter than before. The references all run
-    large sizes at medium weight with negative tracking; the previous 600 at
-    -0.02em read dense next to them. The hero keeps its bold treatment
-    explicitly — that is the one place weight is doing identity work.
-  */
+  /* Display face, lighter and tighter than the body stack. The hero sets its
+     own weight explicitly — that is the one place weight does identity work. */
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     letter-spacing: -0.03em;
@@ -423,13 +337,8 @@
     Nodes sit at the major intersections, and the whole thing is radially masked
     so it dissolves rather than stopping at a hard edge.
   */
-  /*
-    The landing page's sky (components/sky.tsx). Covers the body's graph paper
-    entirely: a deep top-to-bottom gradient, one teal key light where the arena
-    sits, a faint warm counter-light low on the opposite side, then the same
-    film grain the rest of the app wears — noise is what keeps a gradient from
-    reading as a screen saver.
-  */
+  /* The landing page's backdrop (components/sky.tsx). Fixed and self-contained:
+     its own gradients and its own grain, independent of `body`. */
   .sky {
     position: fixed;
     inset: 0;
@@ -498,21 +407,10 @@
   }
 }
 
-/*
-  Plain CSS, deliberately outside @layer utilities. Tailwind v4 only emits
-  single-class utilities from that layer, so the compound selectors below
-  ([data-theme] descendants, :has) were silently discarded when they lived
-  there — the class rendered on the element and matched nothing.
-*/
-/*
-  The landing page's inset frame (reference 3). Content sits in a rounded
-  container a little in from the viewport edge, floating on a deeper backdrop,
-  so the page reads as a surface rather than as the window itself.
-
-  Light mode only: on dark the effect is invisible — there is not enough
-  separation between a near-black backdrop and a near-black page — and the
-  signed-in shell has a sticky header that would fight the rounded corner.
-*/
+/* Outside @layer utilities on purpose: Tailwind v4 only emits utilities whose
+   class names it finds in source, and it does not parse compound selectors. */
+/* The landing page's inset frame. Content sits in a rounded panel with the sky
+   showing around it. */
 .page-frame {
   border-radius: 0;
 }
@@ -523,12 +421,7 @@
   overflow: clip;
 }
 
-/*
-  The sky is `position: fixed`, so it spans the viewport and would paint over
-  the frame's gutter — the inset would be invisible. Insetting and rounding the
-  sky itself makes it the framed surface rather than something the frame has to
-  fight, and it stays fixed while the content scrolls past.
-*/
+/* `.sky` is fixed, so it would paint over the frame's margin without this. */
 [data-theme='light'] .sky {
   inset: 10px;
   border-radius: 28px;
@@ -561,14 +454,8 @@
   mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 99%);
 }
 
-/*
-  A wash of the page's own background behind the hero copy.
-
-  The arena is deliberately busy — dashed seat rows, orbit rings, a light
-  column — and text sitting directly on it loses contrast exactly where the
-  rings cross a line of type. Feathering the background back in under the copy
-  keeps the stage visible around it without asking the reader to work.
-*/
+/* A wash of the page background behind the hero copy, so the arena rings never
+   cross a line of type. */
 .hero-scrim {
   background: radial-gradient(
     70% 78% at 50% 46%,

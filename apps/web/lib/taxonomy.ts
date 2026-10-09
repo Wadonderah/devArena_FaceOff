@@ -1,8 +1,5 @@
-/// One source of truth for challenge taxonomy.
-///
-/// These lists were duplicated in the authoring form; the importer needs them
-/// too, and a value present in the database but missing a label here renders as
-/// a raw enum string like PROGRAMMING_FUNDAMENTALS in front of an organizer.
+/// One source of truth for challenge taxonomy. A value in the database with no
+/// label here renders as a raw enum string in front of an organizer.
 
 export const CATEGORIES = [
   'PROGRAMMING_FUNDAMENTALS',
@@ -29,12 +26,9 @@ export const label = (value: string): string =>
 export const asOptions = (values: readonly string[]) =>
   values.map((value) => ({ value, label: label(value) }));
 
-/// Maps a free-text category from an imported document onto a real enum value.
-///
-/// Matching is forgiving because a question paper says "Algorithms", not
-/// "ALGORITHMS" — and it returns null rather than guessing, so an unrecognised
-/// category falls back to the organizer's bulk selection instead of quietly
-/// landing in the wrong bucket.
+/// Maps free text from an imported document onto an enum value. Forgiving,
+/// because papers say "Algorithms"; returns null rather than guessing, so an
+/// unrecognised category falls back to the organizer's bulk selection.
 export function matchCategory(input: string | null): Category | null {
   if (!input) return null;
 
@@ -89,12 +83,7 @@ export const ROUND_PATH: Record<string, string> = {
   DEBUGGING: 'debugging',
 };
 
-/// What each round format is called in the interface.
-///
-/// The console rendered `{round.type}` straight from the enum, so a chip read
-/// "CODING" — which was tolerable only while every badge was uppercase anyway.
-/// With the badges in sentence case it stood out as the one shouting, and it
-/// was also the internal name rather than the one everybody uses out loud.
+/// What each round format is called in the interface, rather than its enum name.
 export const ROUND_TYPE_NAME: Record<string, string> = {
   MCQ: 'Multiple choice',
   CODING: 'Code sprint',

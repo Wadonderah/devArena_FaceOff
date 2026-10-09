@@ -10,13 +10,11 @@ export interface NotificationInput extends NotificationTemplate {
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
-/// One INSERT per chunk. A competition-wide announcement is one row per
-/// participant, and a single statement with a few thousand rows in it is where
-/// parameter limits and statement timeouts start to matter.
+/// Rows per INSERT. A platform-wide announcement is one row per account, and
+/// one statement holding all of them hits parameter limits.
 const CHUNK = 500;
 
-/// `dedupeKey` is absent on purpose: it is an internal idempotency device, and
-/// exposing it would publish the fan-out scheme to anyone with a browser.
+/// `dedupeKey` is absent on purpose — it is internal.
 const LIST_SELECT = {
   id: true,
   type: true,
@@ -34,15 +32,9 @@ export class NotificationsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // ── Creation ────────────────────────────────────────────────────────────
-  //
-  // Every notification in the system is born here. Nothing else calls
-  // `prisma.notification.create`. That is the point: when an email channel is
-  // added, it attaches to this method and every existing caller gains it
-  // without being touched.
-  //
-  // This one throws. The fan-out helpers below are the forgiving layer — see
-  // the note on `dispatch`.
+  // Every notification is created here; nothing else calls
+  // `prisma.notification.create`. An email channel attaches here and every
+  // caller gains it. This throws — the fan-out helpers below forgive.
 
   async createMany(inputs: NotificationInput[]): Promise<number> {
     if (inputs.length === 0) return 0;
@@ -60,8 +52,8 @@ export class NotificationsService {
           metadata: input.metadata ?? undefined,
           dedupeKey: input.dedupeKey ?? null,
         })),
-        // Paired with the unique on (userId, dedupeKey). This is what makes a
-        // repeated fan-out a no-op instead of a duplicate.
+        // Paired with the unique on (userId, dedupeKey): a repeated fan-out
+        // becomes a no-op rather than a duplicate.
         skipDuplicates: true,
       });
       created += count;
@@ -80,7 +72,6 @@ export class NotificationsService {
       where: {
         competitionId,
         ...(options.exceptUserId ? { userId: { not: options.exceptUserId } } : {}),
-        // Someone who has been deactivated should not accumulate a bell.
         user: { isActive: true },
       },
       select: { userId: true },
@@ -92,11 +83,8 @@ export class NotificationsService {
     );
   }
 
-  /// Everyone with an active account.
-  ///
-  /// The one fan-out that is not scoped to a competition. Used for a
-  /// competition opening its registration, where the audience cannot be its
-  /// participants because there are none yet.
+  /// The one fan-out not scoped to a competition — used when a competition
+  /// opens for registration and therefore has no participants yet.
   async notifyAllUsers(
     template: NotificationTemplate,
     options: { exceptUserId?: string; excludeParticipantsOf?: string } = {},
@@ -105,9 +93,7 @@ export class NotificationsService {
       where: {
         isActive: true,
         ...(options.exceptUserId ? { id: { not: options.exceptUserId } } : {}),
-        // "You may now register" is noise for somebody already registered.
-        // Reachable because enrolment can predate the REGISTRATION state —
-        // a competition can be moved back to DRAFT and forward again.
+        // Enrolment can predate REGISTRATION, so this is reachable.
         ...(options.excludeParticipantsOf
           ? { participations: { none: { competitionId: options.excludeParticipantsOf } } }
           : {}),
@@ -125,8 +111,7 @@ export class NotificationsService {
     return this.dispatch([{ ...template, userId }], `user ${userId}`);
   }
 
-  /// Organizers and administrators. Used for operational alerts, never for
-  /// anything a participant generates.
+  /// Operational alerts only, never anything a participant generates.
   async notifyStaff(template: NotificationTemplate): Promise<number> {
     const staff = await this.prisma.user.findMany({
       where: { role: { in: [Role.ORGANIZER, Role.SUPER_ADMIN] }, isActive: true },
@@ -139,16 +124,9 @@ export class NotificationsService {
     );
   }
 
-  /// Creates, and swallows any failure.
-  ///
-  /// Same reasoning as AuditService.record: a notification is a side effect of
-  /// something more important than itself. An organizer starting a round must
-  /// not get a 500 because the fan-out failed, and a grading alert must not
-  /// turn a handled failure into an unhandled one. Losing the row is the lesser
-  /// harm, and the log line is what makes it recoverable.
-  ///
-  /// `createMany` stays strict so tests can assert on real failures; only this
-  /// edge forgives.
+  /// Swallows failures, like AuditService.record: a notification is a side
+  /// effect of something more important, so an organizer must not get a 500
+  /// because a fan-out failed. `createMany` stays strict for tests.
   private async dispatch(inputs: NotificationInput[], audience: string): Promise<number> {
     try {
       return await this.createMany(inputs);
@@ -160,13 +138,9 @@ export class NotificationsService {
     }
   }
 
-  // ── Reads and writes, always scoped to the caller ───────────────────────
-  //
-  // `userId` is part of every `where` below, never checked afterwards in a
-  // conditional. Ownership that is expressed as a query predicate cannot be
-  // forgotten on one branch, and a row belonging to someone else is simply not
-  // found — which also means the response cannot distinguish "not yours" from
-  // "does not exist".
+  // `userId` is in every `where` below, never checked afterwards in a
+  // conditional: ownership expressed as a predicate cannot be forgotten on one
+  // branch, and a foreign row is simply not found.
 
   async list(
     userId: string,
@@ -181,9 +155,8 @@ export class NotificationsService {
     const items = await this.prisma.notification.findMany({
       where: { userId },
       select: LIST_SELECT,
-      // `id` breaks ties. Two notifications from the same fan-out share a
-      // `createdAt` to the millisecond, and an unstable sort would let a cursor
-      // skip or repeat rows across pages.
+      // `id` breaks ties: one fan-out shares a `createdAt` to the millisecond,
+      // and an unstable sort makes the cursor skip or repeat rows.
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
       ...(query.before ? { cursor: { id: query.before }, skip: 1 } : {}),
@@ -192,8 +165,7 @@ export class NotificationsService {
     return {
       items,
       unreadCount: await this.unreadCount(userId),
-      // Only when the page came back full. A short page is the last page, and
-      // handing back a cursor there would make the client fetch an empty one.
+      // A short page is the last page.
       nextCursor: items.length === limit ? (items[items.length - 1]?.id ?? null) : null,
     };
   }
@@ -204,15 +176,13 @@ export class NotificationsService {
 
   async markRead(userId: string, id: string): Promise<{ read: true }> {
     const { count } = await this.prisma.notification.updateMany({
-      // `readAt: null` keeps this idempotent: pressing it twice must not
-      // rewrite the timestamp to the later moment.
+      // `readAt: null` keeps this idempotent.
       where: { id, userId, readAt: null },
       data: { readAt: new Date() },
     });
 
     if (count === 0) {
-      // Nothing was updated, which is either "already read" (fine) or "not
-      // yours / no such row" (a 404). Only the miss path pays for the check.
+      // Either already read (fine) or not ours (404). Only the miss path pays.
       const owned = await this.prisma.notification.findFirst({
         where: { id, userId },
         select: { id: true },
@@ -234,15 +204,10 @@ export class NotificationsService {
 
   // ── Announcements ───────────────────────────────────────────────────────
 
-  /// An organizer's broadcast.
-  ///
-  /// The role rule is here rather than on the route because it depends on the
-  /// payload, which a `@Roles` decorator cannot see: a competition-scoped
-  /// announcement is ordinary organizer work, but one with no `competitionId`
-  /// reaches every account on the platform, and that is an administrator's
-  /// decision. `Competition` has no owner column, so an organizer cannot be
-  /// narrowed to their own events — if that is wanted, the competition needs an
-  /// owner first.
+  /// The role rule lives here, not on the route, because it depends on the
+  /// payload: without a `competitionId` this reaches every account, which is an
+  /// administrator's call. `Competition` has no owner column, so an organizer
+  /// cannot be narrowed to their own events.
   async announce(
     actor: { id: string; role: Role },
     input: { title: string; body: string; competitionId?: string },
@@ -256,9 +221,7 @@ export class NotificationsService {
         );
       }
 
-      // Strict, not dispatched: the sender is watching a form and must be told
-      // if nothing went out. The forgiving path is for notifications nobody
-      // asked for.
+      // Strict, not dispatched: the sender is watching a form.
       const users = await this.prisma.user.findMany({
         where: { isActive: true, id: { not: actor.id } },
         select: { id: true },
