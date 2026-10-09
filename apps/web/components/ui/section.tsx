@@ -48,7 +48,15 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className={cn('mt-8 sm:mt-10', className)}>
+    // The gap above a group does NOT shrink on a phone, deliberately.
+    //
+    // It was `mt-8 sm:mt-10` for one pass and that was the wrong instinct:
+    // padding *inside* an element should tighten on a small screen, because
+    // there is less room to spend around content — but the space *between*
+    // groups is what tells a reader one thing has ended and another begun, and
+    // on a narrow column that job gets harder, not easier. Shrinking it ran the
+    // featured competition straight into the next heading.
+    <section className={cn('mt-10', className)}>
       <div className="flex items-center gap-2.5">
         {Icon && (
           <Icon
