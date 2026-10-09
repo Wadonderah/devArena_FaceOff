@@ -26,16 +26,28 @@ import { cn } from '@/lib/cn';
 /// every day, and during an event it is the only reason anyone opens the page.
 /// The explanation now lives in the empty state, which is the only place it is
 /// ever actually needed.
-function CurrentCompetition({ id }: { id: string }) {
-  const { data, isLoading } = useCompetition(id);
+function CurrentCompetition({ competition }: { competition: CompetitionListItem }) {
+  // Two sources on purpose, and this is what fixes the load order.
+  //
+  // The sections below this panel render straight from the list query, so they
+  // appeared the instant it resolved. This panel then fired a SECOND request
+  // for `/competitions/:id` — which cannot even start until the list has
+  // arrived, because it needs the id from it — and showed a 208px grey block
+  // until that landed. So the competition that is actually live was reliably
+  // the last thing on the page to appear, a whole round trip behind a
+  // competition that has not started.
+  //
+  // Everything in the header is already in the list payload: name, state,
+  // description. Only the round strip needs the detail request, so only the
+  // round strip waits for it. The panel itself, with the right name and the
+  // right badge, is there as soon as anything is.
+  const { data } = useCompetition(competition.id);
 
-  if (isLoading) return <Skeleton className="h-52 w-full rounded-xl" />;
-  if (!data) return null;
-
-  const live = data.rounds.find((r) => r.state === 'LIVE');
-  const next = data.rounds.find((r) => r.state === 'SCHEDULED');
+  const live = data?.rounds.find((r) => r.state === 'LIVE');
+  const next = data?.rounds.find((r) => r.state === 'SCHEDULED');
   const focus = live ?? next;
   const isLive = Boolean(live);
+  const loadingRounds = !data;
 
   return (
     <section
@@ -51,16 +63,16 @@ function CurrentCompetition({ id }: { id: string }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
             {/* The page's visual anchor, and the only large type on it. */}
-            <h2 className="text-2xl leading-tight">{data.name}</h2>
-            <CompetitionStateBadge state={data.state} />
+            <h2 className="text-2xl leading-tight">{competition.name}</h2>
+            <CompetitionStateBadge state={competition.state} />
           </div>
           {/* Clamped to two lines on a phone. A three-sentence description was
               pushing the round — the row that matters during an event — most of
               the way off a 390px screen. The full text is one tap away on the
               competition page. */}
-          {data.description && (
+          {competition.description && (
             <p className="mt-2 line-clamp-2 max-w-xl text-[13px] leading-relaxed text-ink-dim sm:line-clamp-none sm:text-[14px]">
-              {data.description}
+              {competition.description}
             </p>
           )}
         </div>
@@ -68,12 +80,12 @@ function CurrentCompetition({ id }: { id: string }) {
         {/* Full width on a phone, so the two buttons share one line below the
             title instead of being crushed beside it. */}
         <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-          <Link href={`/leaderboard/${data.id}`} className="flex-1 sm:flex-none">
+          <Link href={`/leaderboard/${competition.id}`} className="flex-1 sm:flex-none">
             <Button variant="secondary" size="sm" className="w-full">
               Standings
             </Button>
           </Link>
-          <Link href={`/competitions/${data.id}`} className="flex-1 sm:flex-none">
+          <Link href={`/competitions/${competition.id}`} className="flex-1 sm:flex-none">
             <Button variant="secondary" size="sm" icon={<ArrowRight />} className="w-full">
               Open
             </Button>
@@ -96,10 +108,14 @@ function CurrentCompetition({ id }: { id: string }) {
             ) : (
               <CalendarClock aria-hidden size={13} strokeWidth={1.5} />
             )}
-            {isLive ? 'Happening now' : next ? 'Up next' : 'Rounds'}
+            {loadingRounds ? 'Rounds' : isLive ? 'Happening now' : next ? 'Up next' : 'Rounds'}
           </p>
 
-          {focus ? (
+          {loadingRounds ? (
+            // One short line, not a panel-sized block: the shape around it is
+            // already correct and must not move when this resolves.
+            <Skeleton className="mt-2 h-[1.15rem] w-48 rounded" />
+          ) : focus ? (
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
               <h3 className="text-[15px] font-medium text-ink">{focus.name}</h3>
               <RoundStateBadge state={focus.state} />
@@ -115,7 +131,7 @@ function CurrentCompetition({ id }: { id: string }) {
         {/* Full width on a phone: it is the primary action on the page during
             a round, and a 120px button floated right is both easy to miss and
             awkward to hit with a thumb. */}
-        {focus?.state === 'LIVE' && data.joined && (
+        {focus?.state === 'LIVE' && data?.joined && (
           <Link href={`/rounds/${focus.id}/${ROUND_PATH[focus.type]}`} className="w-full sm:w-auto">
             <Button icon={<ArrowRight />} className="w-full">
               Enter round
@@ -189,7 +205,7 @@ function DashboardContent() {
         <>
           {focus && (
             <div className="space-y-4">
-              <CurrentCompetition id={focus.id} />
+              <CurrentCompetition competition={focus} />
               {/* Beneath, not above. A team is a detail of the competition, and
                   it used to sit on top of the thing it belongs to. */}
               <TeamCard competitionId={focus.id} />

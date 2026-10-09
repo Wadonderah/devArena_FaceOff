@@ -87,6 +87,7 @@ export class GoogleSignInService {
     }
 
     await this.link(existing.id, identity);
+    await this.adoptAvatar(existing.id, identity);
     await this.audit.record({
       actorId: existing.id,
       action: 'auth.google.linked',
@@ -120,7 +121,10 @@ export class GoogleSignInService {
           // competition until it is verified by email like any other.
           emailVerified: identity.emailVerified,
           profile: {
-            create: { displayName: identity.name?.trim() || identity.email.split('@')[0] },
+            create: {
+              displayName: identity.name?.trim() || identity.email.split('@')[0],
+              avatarUrl: identity.picture ?? null,
+            },
           },
           oauthAccounts: {
             create: { provider: OAuthProvider.GOOGLE, providerAccountId: identity.sub },
@@ -196,6 +200,14 @@ export class GoogleSignInService {
         },
       });
 
+      // Same "fill, never replace" rule as the verified path.
+      if (identity.picture) {
+        await tx.profile.updateMany({
+          where: { userId: existing.id, avatarUrl: null },
+          data: { avatarUrl: identity.picture },
+        });
+      }
+
       await tx.refreshToken.updateMany({
         where: { userId: existing.id, revokedAt: null },
         data: { revokedAt: new Date() },
@@ -226,6 +238,22 @@ export class GoogleSignInService {
     });
 
     return this.assertActive(user);
+  }
+
+  /// Fill in an avatar, but never replace one.
+  ///
+  /// `avatarUrl: null` in the where clause is the whole guard: somebody who
+  /// registered with a password and chose their own picture keeps it, while
+  /// somebody who never set one gets their Google photo. Expressed as a single
+  /// conditional update rather than read-then-write, so two concurrent links
+  /// cannot both decide the field was empty.
+  private async adoptAvatar(userId: string, identity: GoogleIdentity): Promise<void> {
+    if (!identity.picture) return;
+
+    await this.prisma.profile.updateMany({
+      where: { userId, avatarUrl: null },
+      data: { avatarUrl: identity.picture },
+    });
   }
 
   private async link(userId: string, identity: GoogleIdentity): Promise<void> {

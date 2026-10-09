@@ -17,6 +17,9 @@ export interface GoogleIdentity {
   /// configurations, and the reason we do not blindly trust the email.
   emailVerified: boolean;
   name?: string;
+  /// Google's hosted avatar, e.g. https://lh3.googleusercontent.com/a/…=s96-c
+  /// Absent for an account that has never set one.
+  picture?: string;
 }
 
 /// Google's OAuth 2.0 authorization-code flow, implemented directly.
@@ -39,6 +42,27 @@ export interface GoogleIdentity {
 /// to a request only we could make. Signature verification exists for id_tokens
 /// that arrive over an untrusted channel — one handed to us by a browser, say
 /// — which is not this. Google's own server-flow guidance says the same.
+/// Google serves avatars from `*.googleusercontent.com` over https.
+///
+/// Checked as a parsed hostname rather than with `startsWith`, because
+/// `https://lh3.googleusercontent.com.evil.test/x` passes a prefix test and is
+/// not Google. The CSP in the frontend's middleware is the second layer; this
+/// is the first.
+function isGoogleAvatar(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      (url.hostname === 'googleusercontent.com' ||
+        url.hostname.endsWith('.googleusercontent.com'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 @Injectable()
 export class GoogleOAuthService {
   private readonly logger = new Logger(GoogleOAuthService.name);
@@ -184,6 +208,11 @@ export class GoogleOAuthService {
       // endpoint and the vintage. Anything else is treated as unverified.
       emailVerified: claims.email_verified === true || claims.email_verified === 'true',
       name: typeof claims.name === 'string' ? claims.name : undefined,
+      // Only Google's own CDN. The claim is a URL we will put in an <img src>,
+      // and anything else arriving here would be a URL of someone else's
+      // choosing rendered on our origin — so the host is checked rather than
+      // trusted, even though it comes over the authenticated channel.
+      picture: isGoogleAvatar(claims.picture) ? (claims.picture as string) : undefined,
     };
   }
 }
