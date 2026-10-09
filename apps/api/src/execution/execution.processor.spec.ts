@@ -4,6 +4,7 @@ import { ExecutionProcessor, GRADING_FAILED_MESSAGE } from './execution.processo
 import type { Judge0Client } from './judge0.client';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { ScoringService } from '../scoring/scoring.service';
+import type { NotificationsService } from '../notifications/notifications.service';
 
 function makeDeps(submission: unknown) {
   const prisma = {
@@ -21,13 +22,16 @@ function makeDeps(submission: unknown) {
 
   const scoring = { record: jest.fn(), bestExisting: jest.fn(), roundMaxPoints: jest.fn() };
 
+  const notifications = { notifyStaff: jest.fn().mockResolvedValue(1) };
+
   const processor = new ExecutionProcessor(
     prisma as unknown as PrismaService,
     judge0 as unknown as Judge0Client,
     scoring as unknown as ScoringService,
+    notifications as unknown as NotificationsService,
   );
 
-  return { processor, prisma, judge0 };
+  return { processor, prisma, judge0, notifications };
 }
 
 const job = (submissionId: string, attemptsMade = 3, attempts = 3) =>
@@ -124,10 +128,52 @@ describe('ExecutionProcessor.onFailed', () => {
     expect(args.where).toEqual({ id: 'sub-1', status: { not: SubmissionStatus.COMPLETED } });
   });
 
-  it('no longer claims an organizer was notified', () => {
-    // Nothing in the API alerts anyone; the only signal is a counter someone
-    // has to go and look at. Restore the sentence when Item 7 makes it true.
-    expect(GRADING_FAILED_MESSAGE).not.toMatch(/notified/i);
+  // This assertion was the inverse until notifications existed: the sentence
+  // had been removed because nothing in the API alerted anyone, and the test
+  // existed to stop it creeping back. It is now paired with the test below, so
+  // the claim and the mechanism cannot drift apart again — removing the alert
+  // fails one of them, removing the sentence fails the other.
+  it('tells the participant an organizer was notified', () => {
+    expect(GRADING_FAILED_MESSAGE).toMatch(/organizer has been notified/i);
     expect(GRADING_FAILED_MESSAGE).toMatch(/not in your code/i);
+  });
+
+  it('alerts staff once the attempts are exhausted', async () => {
+    const { processor, notifications } = makeDeps(gradable(SubmissionStatus.RUNNING));
+
+    await processor.onFailed(job('sub-1', 3, 3), new Error('judge0 exploded'));
+
+    expect(notifications.notifyStaff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'GRADING_ALERT',
+        // The fault string is staff-only context, so it belongs in metadata
+        // rather than in a body a participant could ever see.
+        metadata: expect.objectContaining({
+          submissionId: 'sub-1',
+          reason: 'judge0 exploded',
+        }),
+      }),
+    );
+  });
+
+  it('does not alert while attempts remain', async () => {
+    const { processor, notifications } = makeDeps(gradable(SubmissionStatus.RUNNING));
+
+    await processor.onFailed(job('sub-1', 1, 3), new Error('transient'));
+
+    expect(notifications.notifyStaff).not.toHaveBeenCalled();
+  });
+
+  // The submission was graded successfully and only the bookkeeping failed.
+  // Alerting here would send staff to look at a result that is perfectly fine,
+  // and on a bad day that is one alert per graded submission.
+  it('does not alert when nothing was downgraded', async () => {
+    const { processor, prisma, notifications } = makeDeps(gradable(SubmissionStatus.RUNNING));
+    prisma.submission.updateMany.mockResolvedValue({ count: 0 });
+    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await processor.onFailed(job('sub-1', 3, 3), new Error('scoring blew up after grading'));
+
+    expect(notifications.notifyStaff).not.toHaveBeenCalled();
   });
 });

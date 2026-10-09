@@ -9,12 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Badge, CompetitionStateBadge, RoundStateBadge } from '@/components/ui/badge';
 import { Field } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select';
+import { StateMenu, type StateOption } from '@/components/ui/state-menu';
 import { TextAreaField } from '@/components/ui/textarea';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError, describeError } from '@/lib/api';
-import type { ChallengeType, Competition, RoundSummary, RoundType } from '@/lib/types';
+import type {
+  ChallengeType,
+  Competition,
+  CompetitionState,
+  RoundSummary,
+  RoundType,
+} from '@/lib/types';
 import { cn } from '@/lib/cn';
-import { ALL_LANGUAGES, LANGUAGE_LABELS } from '@/lib/taxonomy';
+import { ALL_LANGUAGES, LANGUAGE_LABELS, ROUND_TYPE_NAME } from '@/lib/taxonomy';
 import { ROUND_ACTIONS, TRANSITION_TOAST } from '@/lib/round-actions';
 import {
   RoundScoringFields,
@@ -57,6 +64,44 @@ const COMPETITION_TOAST: Record<string, string> = {
   COMPLETED: 'Competition completed',
   ARCHIVED: 'Competition archived',
 };
+
+/// What each state does, shown in the menu before it is chosen.
+///
+/// These were discoverable only by pressing. The REGISTRATION line matters
+/// most: it now notifies every account on the platform, which is not something
+/// an organizer should find out afterwards.
+const COMPETITION_STATES: StateOption<CompetitionState>[] = [
+  {
+    value: 'DRAFT',
+    label: 'Draft',
+    hint: 'Hidden from participants. Nobody can see or join it.',
+    tone: 'neutral',
+  },
+  {
+    value: 'REGISTRATION',
+    label: 'Registration open',
+    hint: 'Anyone can join. Notifies every account once.',
+    tone: 'brand',
+  },
+  {
+    value: 'LIVE',
+    label: 'Live',
+    hint: 'Rounds can run and record scores. Teams lock.',
+    tone: 'live',
+  },
+  {
+    value: 'COMPLETED',
+    label: 'Completed',
+    hint: 'Closes the competition. Standings stay readable.',
+    tone: 'success',
+  },
+  {
+    value: 'ARCHIVED',
+    label: 'Archived',
+    hint: 'Retired and moved out of the main list.',
+    tone: 'neutral',
+  },
+];
 
 const CHALLENGE_NOUN: Record<RoundType, string> = {
   MCQ: 'questions',
@@ -624,7 +669,7 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-[15px]">{round.name}</span>
             <RoundStateBadge state={round.state} />
-            <Badge>{round.type}</Badge>
+            <Badge>{ROUND_TYPE_NAME[round.type] ?? round.type}</Badge>
             {round.participationMode && round.participationMode !== 'INDIVIDUAL' && (
               <Badge tone="brand">
                 {round.participationMode === 'TEAM' ? 'Team scored' : 'Team + individual'}
@@ -824,18 +869,13 @@ function ManageCompetition({ id }: { id: string }) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <SelectField
-            label=""
-            aria-label="Competition state"
-            options={[
-              { value: 'DRAFT', label: 'Draft' },
-              { value: 'REGISTRATION', label: 'Registration open' },
-              { value: 'LIVE', label: 'Live' },
-              { value: 'COMPLETED', label: 'Completed' },
-              { value: 'ARCHIVED', label: 'Archived' },
-            ]}
+          <StateMenu
+            label="Competition state"
+            className="w-52"
             value={data.state}
-            onChange={(e) => setState.mutate(e.target.value)}
+            options={COMPETITION_STATES}
+            pending={setState.isPending}
+            onChange={(next) => setState.mutate(next)}
           />
           <Link href={`/leaderboard/${id}`}>
             <Button variant="secondary">Leaderboard</Button>
@@ -883,7 +923,7 @@ function ManageCompetition({ id }: { id: string }) {
         )}
 
         {data.rounds.length === 0 ? (
-          <p className="p-8 text-center text-[14px] text-ink-dim">
+          <p className="p-5 sm:p-8 text-center text-[14px] text-ink-dim">
             No rounds yet. Create one to get started.
           </p>
         ) : (

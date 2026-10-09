@@ -221,7 +221,7 @@ function DebuggingWorkspace({
           moved the bug report, flicking just outside moved the page, and
           reaching the editor meant scrolling the whole report first. */}
       <section className="min-w-0 space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
-        <div className="panel hairline bracketed p-5">
+        <div className="panel hairline bracketed p-4 sm:p-5">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-live">
             Bug report
           </p>
@@ -261,7 +261,7 @@ function DebuggingWorkspace({
         )}
 
         {bug.testCases.length > 0 && (
-          <div className="panel hairline p-5">
+          <div className="panel hairline p-4 sm:p-5">
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
               Reproduction
             </p>
@@ -403,7 +403,7 @@ function DebuggingRound({ roundId }: { roundId: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Round unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">{message(error, 'Please try again.')}</p>
       </div>

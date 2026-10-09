@@ -3,10 +3,13 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CompetitionState, RoundState } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { competitionOpenForRegistration } from '../notifications/notification-templates';
 import type { CreateCompetitionDto, UpdateCompetitionDto } from './dto/competition.dto';
 
 // Rounds in DRAFT are invisible to participants: a round still being authored
@@ -20,7 +23,12 @@ const PARTICIPANT_ROUND_STATES = [
 
 @Injectable()
 export class CompetitionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CompetitionsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async create(dto: CreateCompetitionDto) {
     this.assertRegistrationWindow(dto.registrationOpensAt, dto.registrationClosesAt);
@@ -41,7 +49,11 @@ export class CompetitionsService {
     });
   }
 
-  async update(id: string, dto: UpdateCompetitionDto) {
+  /// `actorId` is only used to keep the organizer out of their own
+  /// announcement, so it is optional: it carries no authorization weight, and a
+  /// caller without a user context should still be able to update. The role
+  /// check lives on the route.
+  async update(id: string, dto: UpdateCompetitionDto, actorId?: string) {
     const existing = await this.prisma.competition.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Competition not found');
 
@@ -50,7 +62,7 @@ export class CompetitionsService {
       dto.registrationClosesAt ?? existing.registrationClosesAt?.toISOString(),
     );
 
-    return this.prisma.competition.update({
+    const updated = await this.prisma.competition.update({
       where: { id },
       data: {
         name: dto.name,
@@ -65,6 +77,46 @@ export class CompetitionsService {
         maxTeamSize: dto.maxTeamSize,
       },
     });
+
+    // The transition *into* REGISTRATION, not merely a save that happens to
+    // carry that state. An organizer editing the name of a competition already
+    // open for registration sends `state: 'REGISTRATION'` with every PATCH, and
+    // without this comparison each of those would be an opening announcement.
+    //
+    // `dedupeKey` would catch the repeat anyway; this avoids the pointless
+    // platform-wide query in the first place.
+    if (
+      dto.state === CompetitionState.REGISTRATION &&
+      existing.state !== CompetitionState.REGISTRATION
+    ) {
+      await this.announceRegistrationOpen(updated, actorId);
+    }
+
+    return updated;
+  }
+
+  /// Tells the whole platform that a competition is taking entrants.
+  ///
+  /// Best effort, including its own failures: opening registration is the
+  /// organizer's instruction and must not fail because a fan-out did. Same
+  /// contract as the round transitions and AuditService.record.
+  private async announceRegistrationOpen(
+    competition: { id: string; name: string },
+    actorId?: string,
+  ): Promise<void> {
+    try {
+      await this.notifications.notifyAllUsers(competitionOpenForRegistration(competition), {
+        // The organizer who just pressed the button does not need telling.
+        exceptUserId: actorId,
+        excludeParticipantsOf: competition.id,
+      });
+    } catch (error) {
+      this.logger.error(
+        `Competition ${competition.id} opened for registration but nobody was notified: ${
+          (error as Error).message
+        }`,
+      );
+    }
   }
 
   /// Permanently remove a competition, and only while it is still a draft.
@@ -205,12 +257,24 @@ export class CompetitionsService {
 
     const now = new Date();
 
+    // Both messages name the moment. "Registration has not opened yet" left a
+    // participant with no idea whether to wait five minutes or a week — and it
+    // was especially baffling because the badge beside it said "Registration",
+    // the state and the window being two different things that can disagree.
+    //
+    // The UI now hides the Join button in this case (see lib/registration.ts),
+    // so reaching here means a stale page or a clock skew. The date is what
+    // makes that self-explanatory rather than a contradiction.
     if (competition.registrationOpensAt && now < competition.registrationOpensAt) {
-      throw new ForbiddenException('Registration has not opened yet');
+      throw new ForbiddenException(
+        `Registration opens on ${formatUtc(competition.registrationOpensAt)}`,
+      );
     }
 
     if (competition.registrationClosesAt && now > competition.registrationClosesAt) {
-      throw new ForbiddenException('Registration has closed');
+      throw new ForbiddenException(
+        `Registration closed on ${formatUtc(competition.registrationClosesAt)}`,
+      );
     }
 
     await this.prisma.competitionParticipant.upsert({
@@ -227,4 +291,20 @@ export class CompetitionsService {
       throw new BadRequestException('Registration must close after it opens');
     }
   }
+}
+
+/// A timestamp a participant can read, in UTC.
+///
+/// Raw ISO ("2026-10-15T09:43:00.000Z") is precise and unreadable. The server
+/// does not know the caller's timezone, so UTC is stated explicitly rather than
+/// implied — the frontend renders the same instant in local time, and this is
+/// only reached when a page is stale.
+function formatUtc(date: Date): string {
+  const formatted = new Intl.DateTimeFormat('en-GB', {
+    dateStyle: 'long',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+  }).format(date);
+
+  return `${formatted} UTC`;
 }

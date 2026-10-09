@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { LayoutGrid, LogOut, Trophy, Users, Wrench } from 'lucide-react';
 import { Monogram } from '@/components/brand-mark';
+import { NotificationBell } from '@/components/notification-bell';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { api } from '@/lib/api';
 import { useCompetitions, useCurrentUser, useLogout } from '@/lib/hooks';
@@ -25,9 +26,14 @@ const ROLE_LABEL: Record<string, string> = {
 /// The app shell: a left rail on desktop, a bottom bar on a phone.
 ///
 /// This replaced a floating top bar. The bar worked, but everything still to
-/// land wants room it did not have — a notification bell with an unread badge,
+/// land wanted room it did not have — a notification bell with an unread badge,
 /// and an identity block. On a phone it had already been reflowed to two rows
 /// to stop the nav being squeezed off-screen, which was the warning sign.
+///
+/// The bell has since landed, in both places, and needed no layout change to
+/// take it. The rail puts it beside the brand where a left rail conventionally
+/// carries it; the phone strip puts it with the other controls, which is the
+/// one spot on that layout with room for a popover.
 ///
 /// A rail has vertical space to spare and grows downward rather than competing
 /// sideways. On a phone a fixed bottom bar is the native pattern and puts the
@@ -74,10 +80,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh lg:flex">
       {/* ── Desktop rail ──────────────────────────────────────────────── */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface-1/60 px-3 py-4 lg:flex">
-        <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-2">
-          <Monogram size={26} />
-          <span className="text-sm font-semibold tracking-tight">Face-Off</span>
-        </Link>
+        <div className="mb-6 flex items-center gap-2 px-2">
+          <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
+            <Monogram size={26} />
+            <span className="truncate text-sm font-semibold tracking-tight">Face-Off</span>
+          </Link>
+          {/* Only once there is a session. Rendering it for a signed-out
+              visitor would poll an endpoint that can only 401. */}
+          {user && <NotificationBell className="ml-auto" />}
+        </div>
 
         <nav aria-label="Main" className="flex flex-col gap-1">
           {links.map((link) => (
@@ -135,6 +146,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <span className="text-sm font-semibold tracking-tight">Face-Off</span>
         </Link>
         <div className="ml-auto flex items-center gap-2">
+          {user && <NotificationBell />}
           <ThemeToggle />
           <button
             type="button"
@@ -150,7 +162,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {/* pb-24 clears the fixed bottom bar, so the last element on a page is
           never hidden behind it. min-w-0 so a wide child cannot push the whole
           layout sideways. */}
-      <main id="main" className="w-full min-w-0 flex-1 px-4 py-6 pb-24 sm:px-6 lg:pb-8">
+      <main id="main" className="w-full min-w-0 flex-1 px-4 py-4 sm:py-6 pb-24 sm:px-6 lg:pb-8">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
 

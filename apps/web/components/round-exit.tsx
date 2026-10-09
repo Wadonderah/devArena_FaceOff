@@ -30,7 +30,7 @@ export function RoundClosed({
   state: RoundState;
 }) {
   return (
-    <section className="panel hairline p-8 text-center">
+    <section className="panel hairline p-5 sm:p-8 text-center">
       <div
         aria-hidden
         className="mx-auto grid size-11 place-items-center rounded-full bg-brand/15 text-brand-bright"
@@ -65,7 +65,7 @@ export function RoundClosed({
 /// browser's back button.
 export function RoundExitLinks({ competitionId }: { competitionId: string }) {
   return (
-    <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-line pt-5 text-[13px]">
+    <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-line pt-4 sm:pt-5 text-[13px]">
       <Link
         href={`/leaderboard/${competitionId}`}
         className="inline-flex items-center gap-1.5 text-ink-dim underline underline-offset-4 transition-colors hover:text-ink"

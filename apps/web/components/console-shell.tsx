@@ -21,6 +21,7 @@ const CONSOLE_NAV = [
   { href: '/admin', label: 'Console' },
   { href: '/admin/challenges', label: 'Library' },
   { href: '/admin/challenges/import', label: 'Import' },
+  { href: '/admin/announcements', label: 'Announce' },
 ];
 
 /// Longest matching prefix wins.
@@ -92,7 +93,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
 
   return (
     <Shell>
-      <div className="mb-7 overflow-hidden rounded-xl border border-line bg-surface-1/70">
+      <div className="mb-5 overflow-hidden rounded-xl border border-line bg-surface-1/70 sm:mb-7">
         {/* The event's pulse. Amber-idle, live-coloured and moving the moment a
             round opens — visible from across a room without reading a word. */}
         <div
@@ -105,7 +106,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
           )}
         />
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2 sm:gap-x-5 sm:gap-y-3 sm:px-4 sm:py-2.5">
           <span
             className={cn(
               'rounded-md border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em]',
@@ -126,7 +127,17 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
             <Readout label="Entrants" value={data?.participants} />
           </div>
 
-          <nav aria-label="Console" className="ml-auto flex items-center gap-1">
+          {/* Separated from the readouts and set a step brighter. These links
+              were `text-ink-faint` at the same 11px as the readout labels
+              immediately to their left, so the nav read as more instrument
+              rather than as navigation — which is why a new tab added here went
+              unfound. */}
+          <span aria-hidden className="ml-auto hidden h-4 w-px bg-line sm:block" />
+
+          <nav
+            aria-label="Console"
+            className="flex items-center gap-0.5 rounded-lg bg-surface-0/40 p-0.5"
+          >
             {nav.map((link) => {
               const current = active === link.href;
 
@@ -139,7 +150,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
                     'rounded-md px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors',
                     current
                       ? 'bg-surface-3 text-ink'
-                      : 'text-ink-faint hover:bg-surface-2/70 hover:text-ink-dim',
+                      : 'text-ink-dim hover:bg-surface-2 hover:text-ink',
                   )}
                 >
                   {link.label}

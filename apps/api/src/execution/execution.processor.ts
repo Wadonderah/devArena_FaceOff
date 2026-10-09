@@ -9,6 +9,8 @@ import {
 } from '@prisma/client';
 import { UnrecoverableError, type Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { gradingAlert } from '../notifications/notification-templates';
 import { ScoringService } from '../scoring/scoring.service';
 import { gradeCoding } from '../scoring/scoring';
 import { Judge0Client, Judge0RequestError, type Judge0SubmissionSpec } from './judge0.client';
@@ -17,16 +19,18 @@ import { isPass, isPlatformFault, LANGUAGE_IDS, toOutcome } from './judge0.statu
 
 /// What a participant sees when grading failed on our side.
 ///
-/// It used to say "An organizer has been notified", which was false: nothing in
-/// the API alerts anyone. The only organizer-facing signal is a counter on the
-/// admin console that someone has to go and look at. Claiming otherwise told a
-/// participant to sit and wait for help that was not coming.
+/// This once said "An organizer has been notified" while nothing in the API
+/// alerted anyone, which told a participant to sit and wait for help that was
+/// not coming. The sentence was removed for exactly as long as it was false.
 ///
-/// Item 7 adds in-app notifications; when GRADING_ALERT is wired to this path,
-/// the sentence can be restored because it will then be true.
+/// `onFailed` now emits a GRADING_ALERT to every organizer and administrator,
+/// so it is true again and has been put back — the claim and the mechanism
+/// land in the same change, and neither should ever be edited without the
+/// other.
 export const GRADING_FAILED_MESSAGE =
   'We could not grade that attempt. Something went wrong on our side, not in your code, ' +
-  'and it does not count against your attempts. Try submitting again.';
+  'and it does not count against your attempts. An organizer has been notified. ' +
+  'Try submitting again.';
 
 @Processor(EXECUTION_QUEUE)
 export class ExecutionProcessor extends WorkerHost {
@@ -36,6 +40,7 @@ export class ExecutionProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly judge0: Judge0Client,
     private readonly scoring: ScoringService,
+    private readonly notifications: NotificationsService,
   ) {
     super();
   }
@@ -334,6 +339,17 @@ export class ExecutionProcessor extends WorkerHost {
       this.logger.warn(
         `Grading job for ${submissionId} exhausted its attempts, but the submission is already COMPLETED; leaving the result intact`,
       );
+      // Nothing was downgraded, so there is nothing to alert about: the
+      // submission was graded successfully and only the bookkeeping failed.
+      return;
     }
+
+    // Deliberately after the status write and deliberately unable to fail it.
+    // This is the handler of last resort — if it threw, BullMQ would be
+    // handling a failure inside a failure handler, and the participant's row
+    // would be the thing that paid for it.
+    await this.notifications.notifyStaff(
+      gradingAlert({ id: submissionId, attempts: maxAttempts, reason: error.message }),
+    );
   }
 }

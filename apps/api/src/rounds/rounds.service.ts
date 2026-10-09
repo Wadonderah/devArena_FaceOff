@@ -3,10 +3,13 @@ import {
     ConflictException,
     ForbiddenException,
     Injectable,
+    Logger,
     NotFoundException,
 } from '@nestjs/common'
 import { ChallengeType, Prisma, RoundState, RoundType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationsService } from '../notifications/notifications.service'
+import { roundEnded, roundStarted } from '../notifications/notification-templates'
 import { seededShuffle } from '../common/shuffle'
 import { canTransition, scoresAreLocked } from './round-state'
 import { weightedContribution } from '../scoring/scoring'
@@ -20,7 +23,12 @@ const CHALLENGE_TYPE_FOR: Record<RoundType, ChallengeType> = {
 
 @Injectable()
 export class RoundsService {
-    constructor(private readonly prisma: PrismaService) {}
+    private readonly logger = new Logger(RoundsService.name)
+
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly notifications: NotificationsService
+    ) {}
 
     async create(competitionId: string, dto: CreateRoundDto) {
         const competition = await this.prisma.competition.findUnique({
@@ -109,7 +117,7 @@ export class RoundsService {
 
         const now = new Date()
 
-        return this.prisma.round.update({
+        const updated = await this.prisma.round.update({
             where: { id: roundId },
             data: {
                 state: to,
@@ -121,6 +129,61 @@ export class RoundsService {
                 endsAt: to === RoundState.COMPLETED && !round.endsAt ? now : undefined,
             },
         })
+
+        // After the write, and never in a way that can fail it. An organizer
+        // pressing Start must not see an error because a fan-out query timed
+        // out — `notifyCompetition` swallows and logs, which is the same
+        // contract AuditService.record has had all along.
+        //
+        // Only these two transitions are announced. PAUSED is not an ending
+        // (the round is coming back), and FINALIZED and ARCHIVED are
+        // bookkeeping that happen after the participant has already been told
+        // the round closed. Resuming a paused round transitions to LIVE a
+        // second time, which `dedupeKey` absorbs.
+        if (to === RoundState.LIVE || to === RoundState.COMPLETED) {
+            await this.announceTransition(round, to)
+        }
+
+        return updated
+    }
+
+    /// Best effort, including the lookup.
+    ///
+    /// `notifyCompetition` already swallows its own failures, but the query for
+    /// the competition name happens here, outside it — and an organizer
+    /// pressing Start should not get a 500 because the notification's *inputs*
+    /// could not be read either. The whole hook is the boundary, not just the
+    /// insert.
+    private async announceTransition(
+        round: { id: string; name: string; type: RoundType; competitionId: string },
+        // `typeof`, because Prisma generates RoundState as a const object: the
+        // members are values, not types.
+        to: (typeof RoundState)['LIVE'] | (typeof RoundState)['COMPLETED']
+    ): Promise<void> {
+        try {
+            const competition = await this.prisma.competition.findUnique({
+                where: { id: round.competitionId },
+                select: { name: true },
+            })
+
+            // The round's own competition is missing, which a foreign key
+            // should make impossible. Say nothing rather than send a
+            // notification naming an empty competition.
+            if (!competition) return
+
+            const template =
+                to === RoundState.LIVE
+                    ? roundStarted(round, competition.name)
+                    : roundEnded(round, competition.name)
+
+            await this.notifications.notifyCompetition(round.competitionId, template)
+        } catch (error) {
+            this.logger.error(
+                `Round ${round.id} moved to ${to} but participants were not notified: ${
+                    (error as Error).message
+                }`
+            )
+        }
     }
 
     /// Change a round's weight, recomputing every score already recorded for it.

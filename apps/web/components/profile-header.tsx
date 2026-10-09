@@ -2,6 +2,7 @@
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCurrentUser, useProfile } from '@/lib/hooks';
+import { cn } from '@/lib/cn';
 
 const ROLE_LABEL: Record<string, string> = {
   PARTICIPANT: 'Participant',
@@ -9,58 +10,66 @@ const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: 'Administrator',
 };
 
-/// The dashboard's identity block.
+/// The dashboard's identity line.
 ///
-/// This replaced a heading that read `displayName ? 'Welcome back, X' : 'Dashboard'`.
-/// `useProfile` is a separate query from the one AuthGate waits on, so for its
-/// first few hundred milliseconds the page said "Dashboard" and then swapped to
-/// a name — a visible flicker on every single load, and the first thing anyone
-/// saw after signing in.
+/// Two rewrites, for two different reasons, both worth keeping recorded.
 ///
-/// Two things fix it. The identity that is already known (email, role, and
-/// therefore the initial) comes from `useCurrentUser`, which AuthGate has
-/// resolved before this renders. Only the display name is still in flight, and
-/// that gets a skeleton of the same height rather than a placeholder word, so
-/// nothing moves and nothing says something untrue on the way.
-export function ProfileHeader() {
+/// First it replaced a heading that read `displayName ? 'Welcome back, X' :
+/// 'Dashboard'`. `useProfile` is a separate query from the one AuthGate waits
+/// on, so for its first few hundred milliseconds the page said "Dashboard" and
+/// then swapped to a name — a visible flicker on every load. The identity that
+/// is already known (email, role, initial) comes from `useCurrentUser`, which
+/// AuthGate has resolved before this renders; only the display name is still in
+/// flight, and it gets a skeleton of the same height rather than a placeholder
+/// word.
+///
+/// Then the greeting itself went. "Welcome back" is the register of a
+/// newsletter, not of a competition where the next screen is a timed round, and
+/// at `text-3xl` it was also the largest thing on the page — so the competition
+/// someone actually came for sat below a greeting and a paragraph of
+/// explanation. This is now a single compact line, and the weight belongs to
+/// the competition panel beneath it.
+export function ProfileHeader({ className }: { className?: string }) {
   const { data: user } = useCurrentUser();
   const { data: profile, isLoading } = useProfile();
 
   const displayName = profile?.profile?.displayName;
-  const firstName = displayName?.split(' ')[0];
 
   // From the email rather than the name: the email is known immediately, so the
-  // avatar never changes letter underneath the reader.
+  // letter never changes underneath the reader.
   const initial = (user?.email ?? '?').charAt(0).toUpperCase();
 
   return (
-    <header className="mb-6 flex items-center gap-3.5 sm:gap-4">
+    <header className={cn('flex items-center gap-3', className)}>
       <span
         aria-hidden
-        className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-deep text-[17px] font-semibold text-white sm:size-12 sm:text-lg"
+        className="grid size-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-deep text-[14px] font-semibold text-white"
       >
         {initial}
       </span>
 
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {isLoading ? (
-          // Matches the rendered heading's box so the layout does not shift when
-          // the name arrives.
-          <Skeleton className="h-[1.9rem] w-52 rounded-md" />
+          // Matches the rendered line's box so nothing shifts when it arrives.
+          <Skeleton className="h-[1.1rem] w-40 rounded" />
         ) : (
-          <h1 className="truncate text-2xl sm:text-3xl">
-            {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
+          <h1 className="truncate text-[15px] font-medium leading-tight text-ink">
+            {displayName ?? user?.email ?? ''}
           </h1>
         )}
 
-        <p className="mt-0.5 truncate text-[13px] text-ink-faint">
+        <p className="mt-0.5 truncate text-[12px] leading-tight text-ink-faint">
           {user ? (
             <>
               {ROLE_LABEL[user.role] ?? user.role}
-              <span aria-hidden className="mx-1.5">
-                ·
-              </span>
-              {user.email}
+              {displayName && (
+                <>
+                  <span aria-hidden className="mx-1.5">
+                    ·
+                  </span>
+                  {user.email}
+                </>
+              )}
             </>
           ) : null}
         </p>

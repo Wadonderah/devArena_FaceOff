@@ -8,7 +8,6 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-
 enum Role {
   PARTICIPANT
   ORGANIZER
@@ -32,7 +31,6 @@ enum RoundState {
   FINALIZED
   ARCHIVED
 }
-
 
 enum RevealMode {
   IMMEDIATE
@@ -132,6 +130,32 @@ enum VerificationTokenType {
   PASSWORD_RESET
 }
 
+/// Why a participant was notified.
+///
+/// The type drives the icon and the grouping in the UI, so it is an enum rather
+/// than a free string: a typo in a caller would otherwise reach the bell as an
+/// unstyled row. The three TEAM_REQUEST* members are not used yet — the team
+/// join-request flow lands next — but they are declared here so that item needs
+/// no second migration to alter this type.
+enum NotificationType {
+  ANNOUNCEMENT
+
+  /// A competition opened for registration.
+  ///
+  /// The one notification that cannot be scoped to a competition's
+  /// participants, because at the moment it is sent there are none — telling
+  /// people they may now sign up is the entire point.
+  COMPETITION_OPEN
+
+  TEAM_JOINED
+  ROUND_STARTED
+  ROUND_ENDED
+  GRADING_ALERT
+  TEAM_JOIN_REQUEST
+  TEAM_REQUEST_APPROVED
+  TEAM_REQUEST_DECLINED
+}
+
 model User {
   id            String  @id @default(uuid()) @db.Uuid
   email         String  @unique
@@ -157,6 +181,7 @@ model User {
   mcqAttempts        MCQAttempt[]
   scoreEvents        ScoreEvent[]
   auditLogs          AuditLog[]
+  notifications      Notification[]
 
   @@index([role])
   @@map("users")
@@ -672,4 +697,66 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+/// One delivered notification, per recipient.
+///
+/// Fanned out at write time rather than computed on read: a round starting is
+/// one event but fifty rows, and storing them that way is what lets each
+/// participant mark their own copy read without affecting anyone else. The
+/// alternative — an events table plus a per-user read cursor — cannot express
+/// "read the third one but not the second".
+///
+/// Shaped on AuditLog, which is the existing side table: `@db.Uuid` keys,
+/// `metadata Json?` for the type-specific extras, plural snake_case `@@map`.
+model Notification {
+  id     String           @id @default(uuid()) @db.Uuid
+  userId String           @db.Uuid
+  type   NotificationType
+
+  /// Rendered verbatim. Both are written by the server from server-side state,
+  /// never echoed from a request body, so neither can carry a participant's
+  /// text into another participant's bell.
+  title String
+  body  String
+
+  /// Where clicking the row goes, as an app-relative path such as
+  /// `/rounds/<id>`. Relative by constraint, not convention: the frontend
+  /// refuses anything else, so a stored absolute URL cannot turn the bell into
+  /// an open redirect.
+  linkUrl String?
+
+  /// Type-specific extras — `roundId`, `teamId`, `submissionId`. Deliberately
+  /// not used for anything the UI must have: a row has to render correctly from
+  /// `title`, `body` and `linkUrl` alone.
+  metadata Json?
+
+  /// Null until read. Nullable rather than a boolean so "when" is recoverable,
+  /// and so the unread index below stays small as the table grows.
+  readAt DateTime?
+
+  /// Idempotency key for fan-out, scoped per user, null for anything that may
+  /// legitimately repeat.
+  ///
+  /// A round that is paused and resumed transitions to LIVE twice, and an
+  /// organizer correcting scores reopens and recloses a finished round. Without
+  /// this, each of those sends every participant a duplicate. With it, the
+  /// fan-out is `createMany({ skipDuplicates: true })` and the second attempt
+  /// writes nothing. Postgres treats NULLs as distinct in a unique index, so
+  /// announcements — which have no key and should never be collapsed — are
+  /// unaffected.
+  dedupeKey String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  /// Serves the unread badge: `userId = ? AND readAt IS NULL`.
+  @@index([userId, readAt])
+  /// Serves the list, which is always this user's newest first. The index above
+  /// cannot do it as well — `readAt` sits between the two columns the query
+  /// needs, so it could not be used to satisfy the sort.
+  @@index([userId, createdAt])
+  @@map("notifications")
 }
