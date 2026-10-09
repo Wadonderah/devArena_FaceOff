@@ -205,12 +205,24 @@ export function NotificationBell({ className }: { className?: string }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.98 }}
             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            // Anchored to the right on a phone and to the left in the desktop
-            // rail, because the bell sits at opposite ends of each. `max-w` and
-            // the viewport-relative width keep it on screen at 360px.
+            // Pinned to the viewport on a phone, anchored to the bell on
+            // desktop.
+            //
+            // `right-0` alone was wrong on mobile and the arithmetic says why:
+            // the bell is not the last control in the phone strip — the theme
+            // toggle and sign-out sit after it, about 140px of them. So the
+            // bell's right edge is ~140px in from the viewport, and a panel
+            // 358px wide anchored to it started at roughly -124px. The left
+            // third was simply off-screen.
+            //
+            // A phone gets the standard sheet instead: fixed, full width less a
+            // gutter each side, just below the 48px strip. The desktop rail
+            // keeps the anchored popover, where the bell really is at the top
+            // of a 240px column and there is room to the right.
             className={cn(
-              'absolute z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-line bg-surface-1 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]',
-              'right-0 lg:left-0 lg:right-auto',
+              'z-50 overflow-hidden rounded-xl border border-line bg-surface-1 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]',
+              'fixed inset-x-4 top-14',
+              'lg:absolute lg:inset-x-auto lg:left-0 lg:top-auto lg:mt-2 lg:w-[22rem]',
             )}
           >
             <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
@@ -229,7 +241,7 @@ export function NotificationBell({ className }: { className?: string }) {
               )}
             </header>
 
-            <div className="max-h-[22rem] divide-y divide-line overflow-y-auto overscroll-contain">
+            <div className="max-h-[min(22rem,60vh)] divide-y divide-line overflow-y-auto overscroll-contain">
               {isLoading ? (
                 // Three rows of the same height as the real thing, so the panel
                 // does not resize under the reader when the data lands.
