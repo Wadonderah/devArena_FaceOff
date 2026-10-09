@@ -11,6 +11,11 @@ import { AuthBackdrop } from '@/components/auth-backdrop'
 import { BrandMark } from '@/components/brand-mark'
 import { Skeleton } from '@/components/ui/skeleton'
 import { safeReturnTo } from '@/lib/safe-return-to'
+import {
+    AuthDivider,
+    GoogleSignInButton,
+    useAuthProviders,
+} from '@/components/google-sign-in-button'
 
 function LoginForm() {
     const router = useRouter()
@@ -21,6 +26,7 @@ function LoginForm() {
     const [password, setPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [pending, setPending] = useState(false)
+    const { data: providers } = useAuthProviders()
 
     async function onSubmit(event: FormEvent) {
         event.preventDefault()
@@ -78,7 +84,15 @@ function LoginForm() {
         string — into history, access logs and Referer headers. With POST the
         worst case puts it in a request body instead.
       */}
-                <form method="post" onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
+                {/* Above the form, which is the convention and also the right
+                    order of likelihood for a new participant: one tap versus
+                    inventing a password. Renders nothing when the provider has
+                    no credentials, so nothing here is ever a dead control. */}
+                <GoogleSignInButton returnTo={returnTo} label="Sign in with Google" />
+
+                {providers?.google && <AuthDivider className="mt-5" />}
+
+                <form method="post" onSubmit={onSubmit} className="mt-5 space-y-4" noValidate>
                     <Field
                         label="Email"
                         type="email"

@@ -74,6 +74,31 @@ export const envSchema = z
     RESEND_API_KEY: optional(z.string().min(1)),
     RESEND_FROM_ADDRESS: optional(z.string().email()),
     RESEND_FROM_NAME: z.string().default('Software Engineering Face-Off'),
+
+    /*
+      Google sign-in. Both optional: with neither set the provider is simply
+      off, `GET /auth/providers` reports it, and the button never renders. That
+      is what lets this ship before the credentials exist, rather than making a
+      missing client id a boot failure on every environment that does not have
+      one yet.
+    */
+    GOOGLE_CLIENT_ID: optional(z.string().min(1)),
+    GOOGLE_CLIENT_SECRET: optional(z.string().min(1)),
+
+    /*
+      Stated, never derived.
+
+      Google rejects a code exchange unless `redirect_uri` byte-matches one of
+      the Authorised redirect URIs registered in the console. Building it from
+      `req.protocol` + `req.get('host')` looks tidier and fails in exactly the
+      place it is hardest to debug: behind Caddy the host header is right but
+      the protocol is whatever the proxy hop used, so production silently sends
+      `http://` and every sign-in dies at the exchange with `redirect_uri_mismatch`.
+
+      In production this is https://api.akwannya-hub.org/api/auth/google/callback
+      — note the `/api` prefix from setGlobalPrefix.
+    */
+    GOOGLE_REDIRECT_URI: optional(z.string().url()),
   })
   .superRefine((env, ctx) => {
     if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
@@ -108,6 +133,29 @@ export const envSchema = z
           message: 'required when MAIL_DRIVER is "resend"',
         });
       }
+    }
+
+    // Half-configured is the dangerous state: an id with no secret gets as far
+    // as redirecting a participant to Google and then fails at the code
+    // exchange, after they have already approved the consent screen. Either
+    // both or neither.
+    const googleId = Boolean(env.GOOGLE_CLIENT_ID);
+    const googleSecret = Boolean(env.GOOGLE_CLIENT_SECRET);
+
+    if (googleId !== googleSecret) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [googleId ? 'GOOGLE_CLIENT_SECRET' : 'GOOGLE_CLIENT_ID'],
+        message: 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set together, or neither',
+      });
+    }
+
+    if (googleId && googleSecret && !env.GOOGLE_REDIRECT_URI) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['GOOGLE_REDIRECT_URI'],
+        message: 'required when Google sign-in is configured',
+      });
     }
 
     if (env.NODE_ENV === 'production') {

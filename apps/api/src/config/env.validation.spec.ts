@@ -139,3 +139,43 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...base, BCRYPT_ROUNDS: '4' })).toThrow(/BCRYPT_ROUNDS/);
   });
 });
+
+describe('Google sign-in configuration', () => {
+  it('is valid when neither value is set', () => {
+    expect(() => validateEnv({ ...base })).not.toThrow();
+  });
+
+  // Half-configured is the dangerous state: an id with no secret gets as far as
+  // redirecting someone to Google and then fails at the exchange, after they
+  // have already approved the consent screen.
+  it('rejects a client id without a secret', () => {
+    expect(() => validateEnv({ ...base, GOOGLE_CLIENT_ID: 'id' })).toThrow(
+      /GOOGLE_CLIENT_SECRET/,
+    );
+  });
+
+  it('rejects a secret without a client id', () => {
+    expect(() => validateEnv({ ...base, GOOGLE_CLIENT_SECRET: 'shh' })).toThrow(
+      /GOOGLE_CLIENT_ID/,
+    );
+  });
+
+  // Google rejects the exchange unless redirect_uri byte-matches the console,
+  // so there is no safe default to fall back on.
+  it('requires a redirect uri once both credentials are present', () => {
+    expect(() =>
+      validateEnv({ ...base, GOOGLE_CLIENT_ID: 'id', GOOGLE_CLIENT_SECRET: 'shh' }),
+    ).toThrow(/GOOGLE_REDIRECT_URI/);
+  });
+
+  it('accepts a complete configuration', () => {
+    expect(() =>
+      validateEnv({
+        ...base,
+        GOOGLE_CLIENT_ID: 'id.apps.googleusercontent.com',
+        GOOGLE_CLIENT_SECRET: 'shh',
+        GOOGLE_REDIRECT_URI: 'https://api.example.org/api/auth/google/callback',
+      }),
+    ).not.toThrow();
+  });
+});

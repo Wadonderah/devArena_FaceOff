@@ -10,6 +10,11 @@ import { PasswordField } from '@/components/ui/password-field';
 import { AuthBackdrop } from '@/components/auth-backdrop';
 import { BrandMark } from '@/components/brand-mark';
 import { MailCheck } from 'lucide-react';
+import {
+  AuthDivider,
+  GoogleSignInButton,
+  useAuthProviders,
+} from '@/components/google-sign-in-button';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ displayName: '', email: '', password: '' });
@@ -17,6 +22,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [sent, setSent] = useState(false);
+  const { data: providers } = useAuthProviders();
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: e.target.value }));
@@ -99,7 +105,13 @@ export default function RegisterPage() {
         string — into history, access logs and Referer headers. With POST the
         worst case puts it in a request body instead.
       */}
-      <form method="post" onSubmit={onSubmit} className="mt-8 space-y-4" noValidate>
+      {/* No email verification step and no password to invent, so for most
+          people this is the whole of registration. It goes first. */}
+      <GoogleSignInButton label="Sign up with Google" />
+
+      {providers?.google && <AuthDivider className="mt-5" />}
+
+      <form method="post" onSubmit={onSubmit} className="mt-5 space-y-4" noValidate>
         <Field
           label="Display name"
           name="displayName"

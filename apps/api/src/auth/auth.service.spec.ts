@@ -132,3 +132,52 @@ describe('AuthService.login', () => {
     expect(audit.record).not.toHaveBeenCalled();
   });
 });
+
+/// Google-only accounts have no password hash at all, which `bcrypt.compare`
+/// cannot be handed.
+describe('AuthService.login — an account with no password', () => {
+  it('answers exactly like a wrong password', async () => {
+    const { service } = build({ passwordHash: null });
+
+    const attempt = service.login(
+      { email: 'ama@example.com', password: 'anything-at-all' },
+      CTX,
+    );
+
+    await expect(attempt).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(attempt).rejects.toThrow('Invalid email or password');
+  });
+
+  // A helpful "this account uses Google" would be an oracle for which addresses
+  // are Google-only — useful to an attacker choosing where to aim a phishing
+  // page, and useless to everyone else, since the sign-in screen already shows
+  // the Google button to everybody.
+  it('does not reveal that the account uses a provider', async () => {
+    const { service } = build({ passwordHash: null });
+
+    await expect(
+      service.login({ email: 'ama@example.com', password: 'x' }, CTX),
+    ).rejects.not.toThrow(/google|provider|oauth/i);
+  });
+
+  // Without the explicit null branch this threw a TypeError out of bcrypt,
+  // which the filter would have rendered as a 500 — a different status and a
+  // different response time from a wrong password, which is the leak.
+  it('does not throw a TypeError out of bcrypt', async () => {
+    const { service } = build({ passwordHash: null });
+
+    await expect(
+      service.login({ email: 'ama@example.com', password: 'x' }, CTX),
+    ).rejects.not.toBeInstanceOf(TypeError);
+  });
+
+  it('still counts towards the lockout', async () => {
+    const { service, prisma } = build({ passwordHash: null });
+
+    await service
+      .login({ email: 'ama@example.com', password: 'x' }, CTX)
+      .catch(() => undefined);
+
+    expect((prisma as unknown as { user: { update: jest.Mock } }).user.update).toHaveBeenCalled();
+  });
+});
