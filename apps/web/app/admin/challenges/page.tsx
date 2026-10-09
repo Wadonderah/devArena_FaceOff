@@ -11,6 +11,7 @@ import { Field } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select';
 import { TextAreaField } from '@/components/ui/textarea';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
@@ -717,37 +718,35 @@ function ChallengesContent() {
 
   return (
     <>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">Challenge library</h1>
-          <p className="mt-1.5 text-[15px] text-ink-dim">
-            Author questions and problems, then publish them for use in rounds.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/admin/challenges/import">
-            <Button variant="secondary">Import from document</Button>
-          </Link>
-          <Button
-            variant={creating === 'MCQ' ? 'primary' : 'secondary'}
-            onClick={() => setCreating(creating === 'MCQ' ? null : 'MCQ')}
-          >
-            New question
-          </Button>
-          <Button
-            variant={creating === 'CODING' ? 'primary' : 'secondary'}
-            onClick={() => setCreating(creating === 'CODING' ? null : 'CODING')}
-          >
-            New problem
-          </Button>
-          <Button
-            variant={creating === 'DEBUGGING' ? 'primary' : 'secondary'}
-            onClick={() => setCreating(creating === 'DEBUGGING' ? null : 'DEBUGGING')}
-          >
-            New bug hunt
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="Challenge library"
+        subtitle="Author questions and problems, then publish them for use in rounds."
+        actions={
+          <>
+            <Link href="/admin/challenges/import">
+              <Button variant="secondary">Import from document</Button>
+            </Link>
+            <Button
+              variant={creating === 'MCQ' ? 'primary' : 'secondary'}
+              onClick={() => setCreating(creating === 'MCQ' ? null : 'MCQ')}
+            >
+              New question
+            </Button>
+            <Button
+              variant={creating === 'CODING' ? 'primary' : 'secondary'}
+              onClick={() => setCreating(creating === 'CODING' ? null : 'CODING')}
+            >
+              New problem
+            </Button>
+            <Button
+              variant={creating === 'DEBUGGING' ? 'primary' : 'secondary'}
+              onClick={() => setCreating(creating === 'DEBUGGING' ? null : 'DEBUGGING')}
+            >
+              New bug hunt
+            </Button>
+          </>
+        }
+      />
 
       {creating && (
         <section className="panel hairline mb-6 p-6">

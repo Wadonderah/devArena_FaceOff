@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Megaphone, Send, Users } from 'lucide-react';
+import { Send, Users } from 'lucide-react';
 import { AuthGate } from '@/components/auth-gate';
 import { ConsoleShell } from '@/components/console-shell';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Field } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select';
 import { TextAreaField } from '@/components/ui/textarea';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PageHeader } from '@/components/ui/page-header';
 import { useToast } from '@/components/ui/toast';
 import { useCompetitions, useCurrentUser, useSendAnnouncement } from '@/lib/hooks';
 import { describeError } from '@/lib/api';
@@ -104,21 +105,12 @@ function AnnouncementForm() {
 
   return (
     <div className="max-w-2xl">
-      <header className="mb-6 flex items-start gap-3">
-        <span
-          aria-hidden
-          className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand/15 text-brand-bright"
-        >
-          <Megaphone size={17} strokeWidth={1.5} />
-        </span>
-        <div>
-          <h1 className="text-2xl">Send an announcement</h1>
-          <p className="mt-1 text-[13px] leading-relaxed text-ink-dim">
-            Appears in the recipient&rsquo;s notification bell straight away. There is no way to
-            recall one, so read it back before you send.
-          </p>
-        </div>
-      </header>
+      {/* Was a bespoke icon-and-title block at `text-2xl`, which made this the
+          one console page whose header did not match the others. */}
+      <PageHeader
+        title="Send an announcement"
+        subtitle="Appears in the recipient’s notification bell straight away. There is no way to recall one, so read it back before you send."
+      />
 
       <form
         className="panel hairline space-y-5 p-5"

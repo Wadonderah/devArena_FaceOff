@@ -79,9 +79,12 @@ function Row({
     </>
   );
 
+  // The hover is applied per branch below, not here: a non-interactive row has
+  // to cancel it, and `cn` is a plain join with no tailwind-merge — layering
+  // `hover:bg-transparent` over `hover:bg-surface-2/60` would leave both in the
+  // class list and let CSS source order decide.
   const shared = cn(
     'flex w-full gap-2.5 px-3 py-2.5 text-left transition-colors',
-    'hover:bg-surface-2/60',
     unread && 'bg-surface-2/30',
   );
 
@@ -89,7 +92,11 @@ function Row({
   // itself marks read.
   if (!href && unread) {
     return (
-      <button type="button" onClick={() => onRead(notification.id)} className={shared}>
+      <button
+        type="button"
+        onClick={() => onRead(notification.id)}
+        className={cn(shared, 'hover:bg-surface-2/60')}
+      >
         {body}
       </button>
     );
@@ -100,7 +107,7 @@ function Row({
   // control is skipped by keyboard navigation, which would make an entire
   // notification unreachable to anyone not using a mouse.
   if (!href) {
-    return <div className={cn(shared, 'hover:bg-transparent')}>{body}</div>;
+    return <div className={shared}>{body}</div>;
   }
 
   return (
@@ -110,7 +117,7 @@ function Row({
         if (unread) onRead(notification.id);
         onNavigate();
       }}
-      className={shared}
+      className={cn(shared, 'hover:bg-surface-2/60')}
     >
       {body}
     </Link>

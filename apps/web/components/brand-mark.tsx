@@ -93,3 +93,45 @@ export function BrandMark({
     </span>
   );
 }
+
+/// The brand's two-sided mark, drawn as a rule.
+///
+/// The logo is a face-off: two teams either side of a divider, teal against
+/// orange. Until this existed the only place that idea survived in the app was
+/// the 24px monogram in the rail, and the palette note said orange was reserved
+/// for "happening now" and nothing else — so on any page without a live round,
+/// half the brand was simply absent.
+///
+/// Two colours meeting in the middle with a gap between them says what the
+/// product is, and it does it structurally rather than as a status. That
+/// distinction is what keeps the live signal intact: orange here is never a
+/// badge, never text and never a number. It is the edge of a panel. Orange as
+/// *state* still only ever appears on a badge, with motion — a different
+/// register that still reads as "now".
+export function FaceOffRule({ live = false }: { live?: boolean }) {
+  return (
+    <div aria-hidden className="flex h-[3px] w-full">
+      {/* Complete alternatives rather than a base plus an override: `cn` is a
+          plain join with no tailwind-merge, so `to-brand` and `to-brand-bright`
+          would both land in the class list and CSS source order would pick the
+          winner. Every conditional style in this codebase is a ternary for
+          exactly that reason. */}
+      <span
+        className={
+          live
+            ? 'flex-1 bg-gradient-to-r from-transparent to-brand-bright'
+            : 'flex-1 bg-gradient-to-r from-transparent to-brand'
+        }
+      />
+      {/* The divider. The whole mark depends on the two sides not touching. */}
+      <span className="w-2 shrink-0" />
+      <span
+        className={
+          live
+            ? 'flex-1 animate-pulse bg-gradient-to-r from-live-soft to-transparent'
+            : 'flex-1 bg-gradient-to-r from-live to-transparent'
+        }
+      />
+    </div>
+  );
+}

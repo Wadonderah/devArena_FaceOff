@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Database, Megaphone, Trophy } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
 import { ConsoleShell } from '@/components/console-shell';
@@ -14,6 +15,8 @@ import { api, ApiError, apiUrl } from '@/lib/api';
 import type { CompetitionListItem, Overview, RoundSummary } from '@/lib/types';
 import { ROUND_ACTIONS, TRANSITION_TOAST } from '@/lib/round-actions';
 import { useToast } from '@/components/ui/toast';
+import { PageHeader } from '@/components/ui/page-header';
+import { Section } from '@/components/ui/section';
 
 function Stat({ label, value, tone }: { label: string; value: number; tone?: 'warn' | 'danger' }) {
   return (
@@ -258,25 +261,32 @@ function AdminContent() {
 
   return (
     <>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">Organizer console</h1>
-          <p className="mt-1.5 text-[15px] text-ink-dim">
-            Create competitions and rounds, author challenges, run the event.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/admin/challenges">
-            <Button variant="secondary">Challenge library</Button>
-          </Link>
-          <Button
-            variant={creating ? 'secondary' : 'primary'}
-            onClick={() => setCreating(!creating)}
-          >
-            {creating ? 'Cancel' : 'New competition'}
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="Organizer console"
+        subtitle="Create competitions and rounds, author challenges, run the event."
+        actions={
+          <>
+            {/* Announcing is an action, not a records page, so it belongs beside
+                the other actions here. It was reachable only as the fifth small
+                link in the strip above, where it sat at the same size and weight
+                as the readout labels and went unnoticed. */}
+            <Link href="/admin/announcements">
+              <Button variant="secondary" icon={<Megaphone />}>
+                Announce
+              </Button>
+            </Link>
+            <Link href="/admin/challenges">
+              <Button variant="secondary">Challenge library</Button>
+            </Link>
+            <Button
+              variant={creating ? 'secondary' : 'primary'}
+              onClick={() => setCreating(!creating)}
+            >
+              {creating ? 'Cancel' : 'New competition'}
+            </Button>
+          </>
+        }
+      />
 
       {creating && (
         <section className="panel hairline mb-6 p-6">
@@ -293,27 +303,43 @@ function AdminContent() {
       {/* Inventory totals only. Live rounds and queue health belong to the
           console strip, which is on every staff page — repeating them here
           would just be two places to read the same number. */}
-      <div className="mb-8 grid grid-cols-3 gap-3">
-        {overview ? (
-          <>
-            <Stat label="Competitions" value={overview.competitions} />
-            <Stat label="Participants" value={overview.participants} />
-            <Stat label="Submissions" value={overview.submissions} />
-          </>
-        ) : (
-          Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-[76px] rounded-xl" />)
-        )}
-      </div>
-
-      {isLoading ? (
-        <SkeletonRows rows={3} />
-      ) : (
-        <div className="space-y-4">
-          {competitions?.map((competition) => (
-            <CompetitionAdmin key={competition.id} competition={competition} />
-          ))}
+      <Section
+        icon={Database}
+        title="Totals"
+        blurb="Everything on the platform, not just this season."
+        className="mt-0"
+      >
+        <div className="grid grid-cols-3 gap-3">
+          {overview ? (
+            <>
+              <Stat label="Competitions" value={overview.competitions} />
+              <Stat label="Participants" value={overview.participants} />
+              <Stat label="Submissions" value={overview.submissions} />
+            </>
+          ) : (
+            Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-[76px] rounded-xl" />
+            ))
+          )}
         </div>
-      )}
+      </Section>
+
+      <Section
+        icon={Trophy}
+        title="Competitions"
+        count={competitions?.length}
+        blurb="Every competition and its rounds. Open one to edit challenges and scheduling."
+      >
+        {isLoading ? (
+          <SkeletonRows rows={3} />
+        ) : (
+          <div className="space-y-4">
+            {competitions?.map((competition) => (
+              <CompetitionAdmin key={competition.id} competition={competition} />
+            ))}
+          </div>
+        )}
+      </Section>
     </>
   );
 }

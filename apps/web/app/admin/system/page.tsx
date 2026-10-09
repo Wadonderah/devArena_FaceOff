@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Field } from '@/components/ui/input';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
 import type { Role } from '@/lib/types';
@@ -81,7 +82,9 @@ function HealthPanel() {
               className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-1 px-3.5 py-2.5"
             >
               <span className="text-[14px] capitalize">{name}</span>
-              <Badge tone={up ? 'success' : 'danger'}>{up ? 'up' : 'down'}</Badge>
+              <Badge tone={up ? 'success' : 'danger'} dot>
+                {up ? 'Up' : 'Down'}
+              </Badge>
             </li>
           );
         })}
@@ -265,12 +268,10 @@ export default function SystemPage() {
   return (
     <AuthGate requireSuperAdmin>
       <ConsoleShell>
-        <header className="mb-6">
-          <h1 className="text-3xl">System</h1>
-          <p className="mt-1.5 text-[15px] text-ink-dim">
-            People, roles, audit trail and dependency health.
-          </p>
-        </header>
+        <PageHeader
+          title="System"
+          subtitle="People, roles, audit trail and dependency health."
+        />
 
         <div className="space-y-5">
           <HealthPanel />

@@ -10,77 +10,106 @@ import { TeamCard } from '@/components/team-card';
 import { VerifyBanner } from '@/components/verify-banner';
 import { ProfileHeader } from '@/components/profile-header';
 import { CompetitionCard, CompetitionRow } from '@/components/competition-card';
-import { useCompetitions } from '@/lib/hooks';
-import { useCompetition } from '@/lib/hooks';
+import { FaceOffRule } from '@/components/brand-mark';
+import { Section } from '@/components/ui/section';
+import { useCompetition, useCompetitions } from '@/lib/hooks';
 import { ROUND_PATH } from '@/lib/taxonomy';
 import { ArrowRight, CalendarClock, LayoutList, Radio, Trophy } from 'lucide-react';
-import type { ReactNode } from 'react';
 import type { CompetitionListItem } from '@/lib/types';
+import { cn } from '@/lib/cn';
 
+/// The competition a participant is most likely here for, as the first thing on
+/// the page.
+///
+/// It used to be third, below a greeting set at `text-3xl` and a paragraph
+/// explaining what a competition is. Both of those are read once; this is read
+/// every day, and during an event it is the only reason anyone opens the page.
+/// The explanation now lives in the empty state, which is the only place it is
+/// ever actually needed.
 function CurrentCompetition({ id }: { id: string }) {
   const { data, isLoading } = useCompetition(id);
 
-  if (isLoading) return <Skeleton className="h-48 w-full rounded-xl" />;
+  if (isLoading) return <Skeleton className="h-52 w-full rounded-xl" />;
   if (!data) return null;
 
   const live = data.rounds.find((r) => r.state === 'LIVE');
   const next = data.rounds.find((r) => r.state === 'SCHEDULED');
   const focus = live ?? next;
+  const isLive = Boolean(live);
 
   return (
-    <section className="panel hairline overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line p-6">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-xl">{data.name}</h2>
+    <section
+      className={cn(
+        'overflow-hidden rounded-xl border bg-surface-1',
+        // A live round earns a warmer edge. Still a border, not a badge.
+        isLive ? 'border-live/25' : 'border-line',
+      )}
+    >
+      <FaceOffRule live={isLive} />
+
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4 p-6">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* The page's visual anchor, and the only large type on it. */}
+            <h2 className="text-2xl leading-tight">{data.name}</h2>
             <CompetitionStateBadge state={data.state} />
           </div>
           {data.description && (
-            <p className="mt-1.5 max-w-lg text-[14px] text-ink-dim">{data.description}</p>
+            <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-ink-dim">
+              {data.description}
+            </p>
           )}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <Link href={`/leaderboard/${data.id}`}>
-            <Button variant="secondary" size="sm">Leaderboard</Button>
+            <Button variant="secondary" size="sm">
+              Standings
+            </Button>
           </Link>
           <Link href={`/competitions/${data.id}`}>
-            <Button size="sm" icon={<ArrowRight />}>Open</Button>
+            <Button variant="secondary" size="sm" icon={<ArrowRight />}>
+              Open
+            </Button>
           </Link>
         </div>
       </div>
 
-      <div className="p-6">
-        <p className="inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.1em] text-ink-faint">
-          {live ? (
-            <Radio aria-hidden size={14} strokeWidth={1.5} className="text-live" />
-          ) : (
-            <CalendarClock aria-hidden size={14} strokeWidth={1.5} />
-          )}
-          {live ? 'Happening now' : next ? 'Up next' : 'Rounds'}
-        </p>
-
-        {focus ? (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h3 className="text-lg">{focus.name}</h3>
-                <RoundStateBadge state={focus.state} />
-              </div>
-              <p className="mt-1 text-[14px] text-ink-faint">
-                {focus._count.challenges}{' '}
-                {focus.type === 'MCQ' ? 'questions' : 'problems'}
-              </p>
-            </div>
-
-            {focus.state === 'LIVE' && data.joined && (
-              <Link href={`/rounds/${focus.id}/${ROUND_PATH[focus.type]}`}>
-                <Button>Enter round</Button>
-              </Link>
+      {/* The round, on its own ground rather than as another paragraph in the
+          same block — during an event this is the only row that matters. */}
+      <div
+        className={cn(
+          'flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t px-6 py-4',
+          isLive ? 'border-live/20 bg-live/[0.04]' : 'border-line bg-surface-2/30',
+        )}
+      >
+        <div className="min-w-0">
+          <p className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
+            {isLive ? (
+              <Radio aria-hidden size={13} strokeWidth={1.75} className="text-live" />
+            ) : (
+              <CalendarClock aria-hidden size={13} strokeWidth={1.5} />
             )}
-          </div>
-        ) : (
-          <p className="mt-3 text-[14px] text-ink-dim">No rounds are open right now.</p>
+            {isLive ? 'Happening now' : next ? 'Up next' : 'Rounds'}
+          </p>
+
+          {focus ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <h3 className="text-[15px] font-medium text-ink">{focus.name}</h3>
+              <RoundStateBadge state={focus.state} />
+              <span className="text-[13px] text-ink-faint">
+                {focus._count.challenges} {focus.type === 'MCQ' ? 'questions' : 'problems'}
+              </span>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[14px] text-ink-dim">No rounds are open right now.</p>
+          )}
+        </div>
+
+        {focus?.state === 'LIVE' && data.joined && (
+          <Link href={`/rounds/${focus.id}/${ROUND_PATH[focus.type]}`}>
+            <Button icon={<ArrowRight />}>Enter round</Button>
+          </Link>
         )}
       </div>
     </section>
@@ -99,33 +128,6 @@ function groupByState(competitions: CompetitionListItem[]) {
     open: competitions.filter((c) => c.state === 'REGISTRATION'),
     past: competitions.filter((c) => c.state === 'COMPLETED' || c.state === 'ARCHIVED'),
   };
-}
-
-function Section({
-  icon: Icon,
-  title,
-  blurb,
-  children,
-}: {
-  icon: typeof Radio;
-  title: string;
-  blurb: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="mt-9">
-      <div className="mb-3.5">
-        <h2 className="inline-flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.12em] text-ink-faint">
-          <Icon aria-hidden size={14} strokeWidth={1.5} />
-          {title}
-        </h2>
-        {/* Every section says what it is for. "Open for registration" is
-            obvious to whoever built it and not to a first-time participant. */}
-        <p className="mt-1 text-[13px] text-ink-faint">{blurb}</p>
-      </div>
-      {children}
-    </section>
-  );
 }
 
 function DashboardContent() {
@@ -147,41 +149,49 @@ function DashboardContent() {
     <>
       <VerifyBanner />
 
-      <ProfileHeader />
-
-      <p className="mb-2 max-w-prose text-[15px] leading-relaxed text-ink-dim">
-        Everything you can take part in right now. A competition runs in timed rounds: answer
-        multiple-choice questions, write code against hidden tests, then fix a broken program.
-      </p>
+      {/* Identity, then straight into the competition. The strip is deliberately
+          small: it answers "am I signed in as the right person", which is a
+          glance, not a headline. */}
+      <ProfileHeader className="mb-5" />
 
       {isLoading ? (
-        <div className="mt-8">
-          <SkeletonRows rows={3} />
-        </div>
+        <SkeletonRows rows={3} />
       ) : !hasAny ? (
-        <div className="panel mt-8 p-10 text-center">
-          <h2 className="text-lg">Nothing running yet</h2>
-          <p className="mx-auto mt-2 max-w-sm text-[14px] leading-relaxed text-ink-dim">
-            No competition has opened. When an organizer starts the next season it appears here,
-            and you will be able to join from this page.
-          </p>
+        <div className="overflow-hidden rounded-xl border border-line bg-surface-1">
+          <FaceOffRule />
+          <div className="p-10 text-center">
+            <h2 className="text-lg">Nothing running yet</h2>
+            <p className="mx-auto mt-2 max-w-md text-[14px] leading-relaxed text-ink-dim">
+              No competition has opened. When an organizer starts the next season it appears
+              here, and you will be able to join from this page.
+            </p>
+            {/* The explanation of what a competition is, in the one place it is
+                actually useful: a screen with nothing else on it. On a populated
+                dashboard it pushed the live round below the fold. */}
+            <p className="mx-auto mt-4 max-w-md border-t border-line pt-4 text-[13px] leading-relaxed text-ink-faint">
+              A competition runs in timed rounds: answer multiple-choice questions, write code
+              against hidden tests, then fix a broken program.
+            </p>
+          </div>
         </div>
       ) : (
         <>
-          {/* The one you are most likely here for keeps the detailed panel:
-              your team, and the round that is open or next. */}
           {focus && (
-            <div className="mt-8 space-y-4">
-              <TeamCard competitionId={focus.id} />
+            <div className="space-y-4">
               <CurrentCompetition id={focus.id} />
+              {/* Beneath, not above. A team is a detail of the competition, and
+                  it used to sit on top of the thing it belongs to. */}
+              <TeamCard competitionId={focus.id} />
             </div>
           )}
 
           {live.length > 0 && (
             <Section
               icon={Radio}
-              title={`Also live · ${live.length}`}
-              blurb="Rounds are running in these too. Scores are recorded as people submit."
+              tone="live"
+              title="Also live"
+              count={live.length}
+              blurb="Rounds are running in these too, and scores record as people submit."
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 {live.map((c) => (
@@ -194,8 +204,9 @@ function DashboardContent() {
           {open.length > 0 && (
             <Section
               icon={LayoutList}
-              title={open.length === 1 ? 'Open for registration' : `Open for registration · ${open.length}`}
-              blurb="Not started yet. Join now and form a team before the first round opens."
+              title="Open for registration"
+              count={open.length}
+              blurb="Not started yet. Join and form a team before the first round opens."
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 {open.map((c) => (
@@ -209,6 +220,7 @@ function DashboardContent() {
             <Section
               icon={Trophy}
               title="Finished"
+              count={past.length}
               blurb="Closed to new submissions. Final standings are still readable."
             >
               <ul className="space-y-2">

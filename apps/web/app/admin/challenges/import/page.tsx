@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
 import { ConsoleShell } from '@/components/console-shell';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Field } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select';
@@ -285,17 +286,15 @@ function ImportContent() {
 
   return (
     <>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">Import questions</h1>
-          <p className="mt-1.5 max-w-xl text-[15px] text-ink-dim">
-            Upload a PDF or Word file, check what was read, then add it to the library.
-          </p>
-        </div>
-        <Link href="/admin/challenges">
-          <Button variant="secondary">Back to library</Button>
-        </Link>
-      </header>
+      <PageHeader
+        title="Import questions"
+        subtitle="Upload a PDF or Word file, check what was read, then add it to the library."
+        actions={
+          <Link href="/admin/challenges">
+            <Button variant="secondary">Back to library</Button>
+          </Link>
+        }
+      />
 
       {!preview && (
         <section className="panel hairline bracketed p-8 text-center">

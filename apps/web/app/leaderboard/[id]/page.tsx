@@ -5,6 +5,7 @@ import { use, useEffect, useRef, useState } from 'react';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
 import { CompetitionStateBadge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -142,42 +143,39 @@ function Board({ competitionId }: { competitionId: string }) {
 
   return (
     <>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-3xl">Leaderboard</h1>
-            <CompetitionStateBadge state={data.competition.state} />
+      <PageHeader
+        title="Leaderboard"
+        badge={<CompetitionStateBadge state={data.competition.state} />}
+        subtitle={data.competition.name}
+        actions={
+          <div className="flex flex-col items-end gap-2">
+            <div
+              role="group"
+              aria-label="Leaderboard view"
+              className="inline-flex rounded-lg border border-line bg-surface-1 p-0.5"
+            >
+              {(['individual', 'teams'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={view === mode}
+                  onClick={() => setView(mode)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-[13px] capitalize transition-colors duration-150',
+                    view === mode ? 'bg-surface-3 text-ink' : 'text-ink-dim hover:text-ink',
+                  )}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+              <p className="flex items-center gap-2 text-[13px] text-ink-faint">
+                <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-success" />
+                Updating every 3 seconds
+              </p>
           </div>
-          <p className="mt-1.5 text-[15px] text-ink-dim">{data.competition.name}</p>
-        </div>
-
-        <div className="flex flex-col items-end gap-2">
-          <div
-            role="group"
-            aria-label="Leaderboard view"
-            className="inline-flex rounded-lg border border-line bg-surface-1 p-0.5"
-          >
-            {(['individual', 'teams'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={view === mode}
-                onClick={() => setView(mode)}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-[13px] capitalize transition-colors duration-150',
-                  view === mode ? 'bg-surface-3 text-ink' : 'text-ink-dim hover:text-ink',
-                )}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-          <p className="flex items-center gap-2 text-[13px] text-ink-faint">
-            <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-success" />
-            Updating every 3 seconds
-          </p>
-        </div>
-      </header>
+        }
+      />
 
       {view === 'teams' && <TeamBoard competitionId={competitionId} />}
 

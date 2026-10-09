@@ -88,3 +88,15 @@ export const ROUND_PATH: Record<string, string> = {
   CODING: 'coding',
   DEBUGGING: 'debugging',
 };
+
+/// What each round format is called in the interface.
+///
+/// The console rendered `{round.type}` straight from the enum, so a chip read
+/// "CODING" — which was tolerable only while every badge was uppercase anyway.
+/// With the badges in sentence case it stood out as the one shouting, and it
+/// was also the internal name rather than the one everybody uses out loud.
+export const ROUND_TYPE_NAME: Record<string, string> = {
+  MCQ: 'Multiple choice',
+  CODING: 'Code sprint',
+  DEBUGGING: 'Bug hunt',
+};

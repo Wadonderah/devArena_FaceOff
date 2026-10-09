@@ -35,8 +35,21 @@ export function CompetitionCard({ competition }: { competition: CompetitionListI
     gate.joinable === false && gate.reason === 'not-open'
       ? gate.detail
       : closingSoon
-        ? `Registration closes ${DATE.format(closes)}`
+        ? `Closes ${DATE.format(closes)}`
         : null;
+
+  // Inside two days. Registration closing is the one fact on this card that
+  // expires, so it is the one that earns a colour — and `warn` rather than
+  // `live`, which means "a round is running right now" and would be a lie here.
+  const urgent =
+    closingSoon && closes !== null && closes.getTime() - Date.now() < 48 * 60 * 60 * 1000;
+
+  // Names what pressing this does. Every card said "Open", which describes the
+  // navigation rather than the thing you came to do — and on a card sitting
+  // under a heading that reads "Open for registration", the same word meaning
+  // two different things.
+  const cta =
+    state === 'REGISTRATION' ? 'Join' : state === 'LIVE' ? 'Enter' : 'View';
 
   return (
     <Link
@@ -54,24 +67,47 @@ export function CompetitionCard({ competition }: { competition: CompetitionListI
 
       {/* Separated from the copy above by a rule rather than just stacked, so
           the facts read as metadata and not as a continuation of the blurb. */}
-      <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-3 text-[13px] text-ink-faint">
+      <div className="mt-3.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-t border-line pt-3 text-[12.5px] text-ink-faint">
         {typeof _count?.participants === 'number' && (
           <span className="inline-flex items-center gap-1.5">
-            <Users aria-hidden size={13} strokeWidth={1.5} />
-            {_count.participants} {_count.participants === 1 ? 'participant' : 'participants'}
+            <Users aria-hidden size={12} strokeWidth={1.5} />
+            {/* Tabular, so a column of cards does not jitter as counts change
+                width. */}
+            <span className="tabular-nums">{_count.participants}</span>
+            <span>{_count.participants === 1 ? 'entrant' : 'entrants'}</span>
+          </span>
+        )}
+
+        {/* One separator language for the whole row. The previous version gave
+            each fact its own icon and an equal gap, so three unrelated items
+            read as a list of equals with no relationship. */}
+        {typeof _count?.participants === 'number' && window && (
+          <span aria-hidden className="text-line-bright">
+            ·
           </span>
         )}
 
         {window && (
-          <span className="inline-flex items-center gap-1.5">
-            <CalendarClock aria-hidden size={13} strokeWidth={1.5} />
+          <span
+            className={
+              urgent
+                ? 'inline-flex items-center gap-1.5 text-warn'
+                : 'inline-flex items-center gap-1.5'
+            }
+          >
+            <CalendarClock aria-hidden size={12} strokeWidth={1.5} />
             {window}
           </span>
         )}
 
-        <span className="ml-auto inline-flex items-center gap-1 text-ink-dim transition-colors group-hover:text-brand-bright">
-          Open
-          <ArrowRight aria-hidden size={13} strokeWidth={1.75} />
+        <span className="ml-auto inline-flex items-center gap-1 font-medium text-ink-dim transition-colors group-hover:text-brand-bright">
+          {cta}
+          <ArrowRight
+            aria-hidden
+            size={13}
+            strokeWidth={1.75}
+            className="transition-transform duration-150 group-hover:translate-x-0.5"
+          />
         </span>
       </div>
     </Link>

@@ -30,8 +30,21 @@
   --color-brand-deep: #0a7c78;
   --color-brand-dim: #086560;
 
-  /* Orange is reserved for "happening now" and nothing else — a single colour
-     carrying one meaning is what makes a live state actually register. */
+  /* Orange has exactly two jobs, and keeping them apart is what stops the
+     second one weakening the first:
+
+       1. STATE — "happening now". Only ever on a badge or a status marker, and
+          always with motion (a ping, a pulse). This is the meaning that has to
+          survive.
+       2. BRAND — the second half of the face-off mark. Only ever structural: a
+          panel edge, the monogram's right chevron. Never a badge, never text,
+          never a number.
+
+     This note used to say orange was reserved for (1) alone. It was, and the
+     result was that on any page without a live round half the brand was absent
+     — the logo is two colours meeting at a divider, and only one of them ever
+     appeared. A rule at the top of a panel cannot be mistaken for a status, so
+     (2) costs (1) nothing. */
   --color-live: #fc7606;
   --color-live-soft: #fda85c;
 
@@ -41,6 +54,27 @@
   --color-success: #22c55e;
   --color-warn: #fda85c;
   --color-danger: #dc2626;
+
+  /*
+    Podium metals, used by the leaderboard and nowhere else.
+
+    Three places needed distinguishing and the code was reaching for whatever
+    was nearest: first took `warn`, second `ink-dim`, and third took `live` —
+    the one colour that is supposed to mean "a round is running right now". A
+    third-place rank number glowing in the live colour is exactly the kind of
+    borrowing that makes a status colour stop meaning anything.
+
+    These are muted on purpose. Saturated metals against a navy surface read as
+    a toy; at this chroma they still say gold, silver and bronze while sitting
+    in the same world as the rest of the palette.
+
+    Declared as `--color-*` so Tailwind generates real utilities for them:
+    anything else is a bare custom property, and `bg-medal-gold/15` — which the
+    podium needs — would not exist.
+  */
+  --color-medal-gold: #e0b252;
+  --color-medal-silver: #aab6c6;
+  --color-medal-bronze: #bf7f4f;
 
   --font-display: var(--font-display-family), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -150,6 +184,12 @@
   --color-line: #dbe3ef;
   --color-line-bright: #c2cede;
 
+  /* Darkened for contrast: the dark theme's metals are legible on navy and
+     wash out completely on #f4f6fb. */
+  --color-medal-gold: #a97b1f;
+  --color-medal-silver: #6b7686;
+  --color-medal-bronze: #8a5a31;
+
   --color-ink: #0f172a;
   --color-ink-dim: #47566e;
   /*
@@ -213,56 +253,37 @@
   }
 
   /*
-    Four stacked layers instead of a pair of symmetric blur blobs. The blobs are
-    what make a dark page read as generic: perfectly even, no texture, no
-    direction. Here the light comes from one corner, a technical grid gives the
-    surface structure, and film grain breaks up the flat fill.
-  */
-  /*
-    Real graph paper has two rules — a fine grid with a heavier line every fifth
-    division — plus the faint marks where you'd plot a point. A single-scale grid
-    reads as a texture; two scales read as a surface you could measure on.
-  */
-  /*
-    The app's surface. Previously two-scale graph paper with plotted nodes,
-    which read as a technical texture pinned behind the interface rather than a
-    space the interface sits in — and it fought the arena on the landing page.
+    One flat fill, and nothing else.
 
-    Now: one off-centre key light, a warm counter-light opposite for depth, and
-    film grain. No repeating rule, so nothing competes with a table or a form.
+    This carried three stacked gradients — a teal key light from the top right,
+    a warm counter-light from the bottom left, and a vertical fade from
+    #0a1024 down to the base surface — plus an SVG film grain over the top. The
+    reasoning recorded here was that an even dark fill "reads as generic".
+
+    That was wrong, and the giveaway is that every application the product is
+    measured against does the opposite: one dark surface, no gradient. The
+    reason is not fashion. An application page is a stack of panels, tables and
+    forms, each of which has its own surface a step lighter than the page. When
+    the page itself changes value from top to bottom, those panels disagree with
+    their own background by a different amount at the top of a scroll than at
+    the bottom, and the whole interface reads as faintly uneven — which is
+    exactly how it was described: a gradient you can detect but not point at.
+
+    Depth now comes only from the surface ladder (surface-0 for the page,
+    surface-1 for a panel, upward from there), which is consistent at every
+    scroll position.
+
+    The landing page is unaffected and keeps the atmosphere: `.sky` below is
+    `position: fixed; inset: 0` with its own gradients and its own grain, so it
+    never depended on this layer at all.
   */
   body {
     position: relative;
-    background:
-      radial-gradient(1200px 620px at 78% -12%, var(--key-light), transparent 60%),
-      radial-gradient(620px 420px at 4% 104%, var(--counter-light), transparent 64%),
-      linear-gradient(to bottom, var(--arena-sky-top), var(--color-surface-0) 62%);
-    background-attachment: fixed;
+    background: var(--color-surface-0);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     min-height: 100dvh;
-  }
-
-  /*
-    Film grain. The single most effective thing against a flat digital fill —
-    real surfaces have noise. Generated by SVG rather than shipped as an image,
-    so it costs nothing to download and scales to any viewport.
-  */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: var(--grain-opacity);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-
-  /* Content sits above the grain. */
-  body > * {
-    position: relative;
-    z-index: 1;
   }
 
   /*

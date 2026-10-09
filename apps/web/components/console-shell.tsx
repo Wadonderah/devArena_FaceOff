@@ -127,7 +127,17 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
             <Readout label="Entrants" value={data?.participants} />
           </div>
 
-          <nav aria-label="Console" className="ml-auto flex items-center gap-1">
+          {/* Separated from the readouts and set a step brighter. These links
+              were `text-ink-faint` at the same 11px as the readout labels
+              immediately to their left, so the nav read as more instrument
+              rather than as navigation — which is why a new tab added here went
+              unfound. */}
+          <span aria-hidden className="ml-auto hidden h-4 w-px bg-line sm:block" />
+
+          <nav
+            aria-label="Console"
+            className="flex items-center gap-0.5 rounded-lg bg-surface-0/40 p-0.5"
+          >
             {nav.map((link) => {
               const current = active === link.href;
 
@@ -140,7 +150,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
                     'rounded-md px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors',
                     current
                       ? 'bg-surface-3 text-ink'
-                      : 'text-ink-faint hover:bg-surface-2/70 hover:text-ink-dim',
+                      : 'text-ink-dim hover:bg-surface-2 hover:text-ink',
                   )}
                 >
                   {link.label}

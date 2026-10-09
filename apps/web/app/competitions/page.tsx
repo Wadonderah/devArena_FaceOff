@@ -5,6 +5,7 @@ import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
 import { CompetitionStateBadge } from '@/components/ui/badge';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import { useCompetitions } from '@/lib/hooks';
 import { ChevronRight, Trophy } from 'lucide-react';
 
@@ -15,9 +16,10 @@ function CompetitionsList() {
 
   return (
     <>
-      <header className="mb-6">
-        <h1 className="text-3xl">Competitions</h1>
-      </header>
+      <PageHeader
+        title="Competitions"
+        subtitle="Everything published, newest first. Open one to join it or read its standings."
+      />
 
       {!data || data.length === 0 ? (
         <div className="panel p-12 text-center">
