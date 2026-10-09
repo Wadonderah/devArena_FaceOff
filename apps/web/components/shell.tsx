@@ -6,9 +6,10 @@ import { useQuery } from '@tanstack/react-query';
 import { LayoutGrid, LogOut, Trophy, Users, Wrench } from 'lucide-react';
 import { Monogram } from '@/components/brand-mark';
 import { NotificationBell } from '@/components/notification-bell';
+import { Avatar } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { api } from '@/lib/api';
-import { useCompetitions, useCurrentUser, useLogout } from '@/lib/hooks';
+import { useCompetitions, useCurrentUser, useLogout, useProfile } from '@/lib/hooks';
 import type { Team } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -72,9 +73,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const signOut = () => logout.mutate(undefined, { onSettled: () => router.push('/login') });
 
-  // From the email, which is known as soon as the session resolves, so the
-  // letter never changes underneath the reader.
-  const initial = (user?.email ?? '?').charAt(0).toUpperCase();
+  // Shared with the dashboard's identity line through React Query's cache, so
+  // this costs no extra request. The avatar falls back to an initial while it
+  // loads, and for anyone who has not set one.
+  const { data: profile } = useProfile();
+  const displayName = profile?.profile?.displayName;
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -111,12 +114,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         <div className="mt-auto space-y-3 border-t border-line pt-3">
           <div className="flex items-center gap-2.5 px-1">
-            <span
-              aria-hidden
-              className="grid size-8 shrink-0 place-items-center rounded-md bg-gradient-to-br from-brand to-brand-deep text-[13px] font-semibold text-white"
-            >
-              {initial}
-            </span>
+            <Avatar name={displayName ?? user?.email} src={profile?.profile?.avatarUrl} size={32} />
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] text-ink">{user?.email ?? '—'}</span>
               <span className="block text-[11px] text-ink-faint">

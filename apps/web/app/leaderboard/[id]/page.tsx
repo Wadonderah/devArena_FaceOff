@@ -91,7 +91,7 @@ function Avatar({ name, highlight }: { name: string; highlight?: boolean }) {
     <span
       aria-hidden
       className={cn(
-        'grid size-7 shrink-0 place-items-center rounded-md text-[12px] font-semibold',
+        'grid size-7 shrink-0 place-items-center rounded-full text-[12px] font-semibold',
         highlight ? 'bg-brand text-white' : 'bg-surface-3 text-ink-dim',
       )}
     >

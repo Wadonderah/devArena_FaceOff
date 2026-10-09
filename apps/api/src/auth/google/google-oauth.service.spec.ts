@@ -214,3 +214,47 @@ describe('GoogleOAuthService.exchangeCode', () => {
     expect(identity.emailVerified).toBe(expected);
   });
 });
+
+describe('GoogleOAuthService avatar claim', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  const withPicture = (picture: unknown) => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id_token: idToken({ sub: 's', email: 'a@b.co', email_verified: true, picture }),
+      }),
+    } as unknown as Response);
+    return makeService().exchangeCode('code');
+  };
+
+  it('accepts a Google-hosted avatar', async () => {
+    const identity = await withPicture('https://lh3.googleusercontent.com/a/ACg8ocAbc=s96-c');
+    expect(identity.picture).toBe('https://lh3.googleusercontent.com/a/ACg8ocAbc=s96-c');
+  });
+
+  it('accepts the bare apex host too', async () => {
+    const identity = await withPicture('https://googleusercontent.com/a/x');
+    expect(identity.picture).toBe('https://googleusercontent.com/a/x');
+  });
+
+  // The claim ends up in an <img src> on our own origin, so the host is checked
+  // rather than trusted — even though it arrived over the authenticated
+  // channel. A prefix test would pass this one, which is why it is parsed.
+  it('rejects a lookalike host that would pass a prefix check', async () => {
+    const identity = await withPicture('https://lh3.googleusercontent.com.evil.test/x');
+    expect(identity.picture).toBeUndefined();
+  });
+
+  it.each([
+    ['plain http', 'http://lh3.googleusercontent.com/a/x'],
+    ['another origin', 'https://evil.test/avatar.png'],
+    ['a javascript url', 'javascript:alert(1)'],
+    ['not a url at all', 'not-a-url'],
+    ['a number', 42],
+    ['absent', undefined],
+  ])('rejects %s', async (_label, picture) => {
+    const identity = await withPicture(picture);
+    expect(identity.picture).toBeUndefined();
+  });
+});
