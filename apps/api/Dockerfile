@@ -7,7 +7,7 @@
 # Debian slim rather than Alpine: Prisma's query engine and bcrypt's native
 # addon both want glibc + OpenSSL. Alpine works only with extra musl engine
 # downloads and libc6-compat, and the failure mode is at runtime, not build.
-FROM node:22-slim AS base
+FROM public.ecr.aws/docker/library/node:22-slim AS base
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable
 WORKDIR /repo
