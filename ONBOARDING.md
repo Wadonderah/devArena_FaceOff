@@ -69,8 +69,8 @@ Two principles shape nearly every design decision here:
 
 **[faceoff.akwannya-hub.org](https://faceoff.akwannya-hub.org)**
 
-That is the real deployed site, not a demo. It was returning HTTP 200 when this
-guide was written. The backend it talks to lives at
+That is the real deployed site, not a demo. It, and both health endpoints below,
+were returning HTTP 200 when this guide was last revised. The backend it talks to lives at
 `https://api.akwannya-hub.org`, and `https://api.akwannya-hub.org/health/live` is
 a small endpoint that answers "yes, I am running". If the site misbehaves, that
 URL is the fastest way to tell whether the backend is down or the problem is
@@ -132,6 +132,14 @@ Things worth noticing:
 - **The worker is not a separate program.** It runs inside the same API process,
   listening to the Redis queue. Drawn separately because it does a genuinely
   different job.
+- **The database is a long way from the API, and this is a known problem.** The
+  Aiven free tier hosts it in India while the server runs in Virginia, about
+  216ms apart. Because recording one multiple-choice answer makes roughly eleven
+  database round trips one after another, that answer takes about 2.4 seconds on
+  the live site and 0.06 seconds on a laptop with a local database. **If the
+  deployed site feels sluggish, this is why — it is not something you broke, and
+  it does not need a new bug report.** It is measured and written up in
+  `loadtest/PERFORMANCE-REPORT.md`, and the fix is to move the database.
 
 ### 4.2 What happens when you submit code
 
@@ -216,6 +224,7 @@ Each row is one technology and the single most important reason it is here.
 | Queue | BullMQ on Redis | Lets grading happen after the response, per 4.2 |
 | Code execution | Judge0 CE | Purpose built sandbox for running untrusted code |
 | Authentication | JWT + Passport | Short lived access token in a cookie, with a refresh token to renew it |
+| Social sign-in | Google OAuth 2.0 | Sign in without a password. Google-verified emails skip our own verification step |
 | Password hashing | bcrypt | Deliberately slow, which makes stolen hashes expensive to crack |
 | Validation | class-validator, Zod | Rejects malformed input at the edge, before it reaches business logic |
 | Security headers | Helmet | Sets the HTTP headers that block several common browser attacks |
@@ -229,7 +238,8 @@ Each row is one technology and the single most important reason it is here.
 | Monorepo | pnpm workspaces | Frontend and backend in one repository, one install, shared lockfile |
 | Node.js | version 20.11 or newer | Required by `engines` in `package.json`. CI uses 22 |
 | Local services | Docker Compose | Postgres and Redis without installing either on your machine |
-| CI | GitHub Actions | Lint and typecheck on every pull request |
+| Tests | Jest | Unit tests in both apps. Run by `pnpm test` and by CI |
+| CI | GitHub Actions | Lint, typecheck **and tests** on every pull request |
 | Deployment | GitHub Actions to ECR, then AWS SSM | A push to `main` rebuilds and restarts the API |
 
 ---
@@ -251,6 +261,7 @@ devArena_FaceOff/
 │   │       ├── main.ts           Entry point. Boots the server.
 │   │       ├── app.module.ts     Wires every module together
 │   │       ├── auth/             Sign up, sign in, tokens, email verification
+│   │       │   └── google/       Google OAuth sign-in
 │   │       ├── users/            Accounts and profiles
 │   │       ├── competitions/     Creating and running competitions
 │   │       ├── rounds/           Rounds inside a competition
@@ -261,6 +272,7 @@ devArena_FaceOff/
 │   │       ├── scoring/          Turns results into points
 │   │       ├── leaderboard/      Rankings
 │   │       ├── admin/            Organizer only operations
+│   │       ├── notifications/    In-app notifications and announcements
 │   │       ├── audit/            Records who changed what
 │   │       ├── mail/             Sends verification emails
 │   │       ├── health/           The /health endpoints
@@ -274,25 +286,42 @@ devArena_FaceOff/
 │       │   ├── login/              /login
 │       │   ├── register/           /register
 │       │   ├── verify-email/       /verify-email
+│       │   ├── forgot-password/    /forgot-password
+│       │   ├── reset-password/     /reset-password
+│       │   ├── auth/callback/      /auth/callback   (returns from Google)
 │       │   ├── dashboard/          /dashboard
 │       │   ├── competitions/       /competitions and /competitions/[id]
 │       │   ├── rounds/[id]/        /rounds/[id]/mcq, /coding, /debugging
 │       │   ├── teams/[id]/         /teams/[id]
 │       │   ├── leaderboard/[id]/   /leaderboard/[id]
-│       │   ├── admin/              organizer pages
+│       │   ├── admin/              organizer pages, incl. /admin/system
+│       │   │                        and /admin/announcements
 │       │   └── globals.css         Colours, fonts, spacing tokens
 │       ├── components/           Reusable UI pieces
-│       ├── lib/                  API client and shared helpers
+│       ├── lib/                  API client, shared helpers, and the
+│       │                         frontend unit tests (*.spec.ts)
 │       └── middleware.ts         Runs before every page request
 │
 ├── .github/workflows/
 │   ├── ci.yml                    Lint and typecheck on every pull request
 │   └── deploy.yml                Deploys the API when main changes
 │
+├── loadtest/                     Load and correctness testing kit (see below)
+├── tools/
+│   └── build_onboarding_pdf.py   Rebuilds the PDF of this document
 ├── docker-compose.dev.yml        Local Postgres and Redis
+├── ONBOARDING.md                 This document
 ├── pnpm-workspace.yaml           Declares apps/* as workspace packages
 └── package.json                  Root scripts (pnpm dev, pnpm test, ...)
 ```
+
+**About `loadtest/`.** A kit that simulates up to 50 bot participants to find
+limits before a real event: a Judge0 throughput test, a seed script, six k6
+scenarios and a correctness verifier. You do not need it to develop features, and
+it is **not** something to point at a database casually — it refuses any database
+host that is not explicitly allowlisted. If you are asked to help with
+performance work, start with `loadtest/README.md`, and read
+`loadtest/PERFORMANCE-REPORT.md` for what the current numbers are and why.
 
 **The two files to open first:** `apps/api/prisma/schema.prisma` tells you what
 data exists in this system, and `apps/api/src/app.module.ts` tells you what the
@@ -322,7 +351,8 @@ Status meanings:
 | Email verification | Ready | Use the link twice. Wait for the 24 hour expiry. Request a new one |
 | Sign in and sign out | Ready | Wrong password, unverified account, signing out in a second tab |
 | Session stays alive | Ready | Leave a tab open past 15 minutes, then act. It should refresh, not eject you |
-| Password reset | **Partially implemented** | Backend exists, **no page in the UI**. Not testable from the browser |
+| Password reset | Ready | `/forgot-password` and `/reset-password` now exist. Use a link twice. Let one expire. Request two in a row |
+| Sign in with Google | Ready | Sign up with Google, then try signing in with a password on the same email. Cancel at Google's consent screen. Note that Google accounts skip email verification |
 
 ### Competitions and rounds
 
@@ -333,7 +363,10 @@ Status meanings:
 | Create rounds | Ready | All three types. Zero challenges. Overlapping times |
 | Attach challenges | Ready | The picker should only offer the type matching the round |
 | Start, pause, end a round | Ready | Pause mid attempt. Does the timer resume correctly? |
-| Edit a round after creation | **Partially implemented** | Only pause and end are exposed. Other fields cannot be changed once created |
+| Edit a round after creation | Ready | `PATCH /rounds/:id` now has a UI. Name, description, weight, start and end times, allowed languages, reveal mode, participation mode, attempt limit and negative marking are all editable. Try editing a live round, and a round that already has submissions |
+| Change a round's weight | Ready, with a caveat worth testing | Changing a weight **rewrites every score event in that round** and so moves people on the leaderboard. **Nobody is notified.** Confirm the totals stay correct and that a round can never contribute more than its weight. A `FINALIZED` or `ARCHIVED` round is correctly locked — unlock it first |
+| Delete a round | Ready | `DELETE /rounds/:id`. Delete one that has submissions and see what happens to their scores |
+| Finalize, unlock, archive a round | Ready | Finalize, then try to score into it — late results must not rewrite a published standing |
 
 ### Taking part
 
@@ -341,12 +374,14 @@ Status meanings:
 | --- | --- | --- |
 | Join a competition | Ready | Join twice. Join one that already ended |
 | Create and join teams | Ready | Wrong join code, full team, leaving, disbanding |
+| Request to join a team | Ready | Ask to join, then withdraw. Approve and decline as captain. Request twice. Request while already in a team |
 | Team changes while live | Ready | Leaving and removals are **deliberately blocked** during a live round. Not a bug |
 | Answer MCQ questions | Ready | Answer past the deadline. Refresh mid round. Two tabs at once |
 | Write and run code | Ready | Infinite loops, huge output, compile errors, all supported languages |
 | Debugging rounds | Ready | Submit the code unchanged. Break it further. Then fix it |
 | Attempt limits | Ready | Exhaust them. "Run" and system errors should **not** count |
 | Leaderboard | Ready | Ties. Live updates during a round |
+| In-app notifications | Ready | Round start and end, team joins, grading alerts, organizer announcements, and a competition opening for registration. Check the bell badge clears correctly and that a notification links somewhere useful |
 
 ### Organizer tools
 
@@ -356,22 +391,39 @@ Status meanings:
 | Bulk import questions | Ready | Malformed files, wrong columns, duplicates |
 | Edit a challenge after creation | **Not yet started** | No endpoint changes a challenge's content. `PATCH /challenges/:id/publish` only toggles visibility. A mistake means creating a new challenge |
 | Audit log | Ready | Confirm state changes are recorded |
-| System page | Ready | Queue depth and health should reflect reality |
+| Announcements | Ready | Send one, confirm every participant receives it. Empty and very long messages |
+| System page | Ready | Shows dependency health and user management (role, activate/deactivate). It does **not** show queue depth — see below |
+| Live queue depth | **Not yet started** | `ExecutionQueue.depth()` exists but is called from nowhere, so there is no way to watch the grading queue while a round runs. Do not expect it on the System page |
 
 ### Not yet started
 
 Do not file bugs for these. They are known absences, not defects: gamification and
 points beyond scoring, badges, certificates, practice mode outside a competition,
-project or portfolio rounds, human judges and manual review, in app notifications,
-and a publicly visible leaderboard (rankings currently require signing in).
+project or portfolio rounds, human judges and manual review, a live view of the
+grading queue, and a publicly visible leaderboard (rankings still require signing
+in — an anonymous request to the leaderboard is rejected).
 
-### Testing that is not automated
+In-app notifications **used to be on this list and are now built.** See the table
+above.
+
+### What the automated tests do and do not cover
+
+This section has **changed substantially since the previous version of this
+guide**, and every change is in your favour.
+
+| | Status |
+| --- | --- |
+| CI runs the tests | **Yes, now.** `ci.yml` runs `pnpm lint`, `pnpm typecheck` and `pnpm test` on every pull request. A broken test blocks the merge. This was previously not the case |
+| Backend unit tests | **31** `.spec.ts` files under `apps/api/src` |
+| Frontend unit tests | **8** `.spec.ts` files under `apps/web/lib`, run by Jest. Previously there was no frontend test runner at all |
+
+Still genuinely missing:
 
 | Gap | Why it matters to you |
 | --- | --- |
-| CI does not run tests | `ci.yml` runs lint and typecheck **only**. The 22 backend test files are not run automatically, so a broken test can be merged. Run `pnpm test` yourself |
 | No end to end tests | `pnpm test:e2e` is listed in `apps/api/package.json` but `apps/api/test/` **does not exist**, so the command fails. Do not report that as a new bug |
-| No frontend tests | There is no test runner in `apps/web`. Every UI change is verified by hand, which is a large part of why volunteer testing is valuable |
+| No component or browser tests | The frontend tests cover helper functions in `apps/web/lib`, not rendered components or user flows. Every UI change is still verified by hand, which is a large part of why volunteer testing is valuable |
+| No load or performance tests in CI | There is a load testing kit in `loadtest/`, but it is run by hand against a throwaway database, never in CI. See Section 6 |
 
 ---
 
@@ -391,27 +443,38 @@ person sees the change first.
 From `git branch` in the repository:
 
 ```
-* feat/infra_deployment
+  feat/infra_deployment
+  feat/load_test
+  feat/notification_leaderboard
+  feat/notifications
+* feat/team_join_requests
   feat/ui_experiments
+  fix/auth_form_usability
+  fix/grading_resilience
+  fix/rate_limit_handling
+  fix/reweight_denominator
+  fix/session_renewal
+  fix/theme_toggle_system
+  fix/ui_polish
   main
 ```
 
 `*` marks the branch currently checked out on the machine this was generated from.
-Each has a matching copy on GitHub (`origin/main` and so on). You will likely see
-more by the time you read this, since branches are created and deleted constantly.
+Each has a matching copy on GitHub (`origin/main` and so on). **Expect this list
+to be wrong by the time you read it** — it grew from three branches to fourteen in
+a fortnight. Run `git branch -a` yourself for the truth.
 
 ### Naming
 
-The convention in use is `feat/` followed by a short description in
-`snake_case`:
+Two prefixes are in use, and the list above shows both:
 
 ```
-feat/team_invite_emails
-feat/leaderboard_filters
+feat/team_join_requests      a new capability
+fix/session_renewal          a correction to existing behaviour
 ```
 
-Use `fix/` for bug fixes. Keep it short and descriptive. The branch name is the
-first thing a reviewer reads.
+The convention is a prefix, then a short description in `snake_case`. Keep it
+short and descriptive. The branch name is the first thing a reviewer reads.
 
 ### The full workflow
 
@@ -460,11 +523,12 @@ there is detail worth having.
 ```bash
 pnpm lint         # style and common mistakes
 pnpm typecheck    # type errors
-pnpm test         # backend tests. CI does NOT run these. See section 7
+pnpm test         # unit tests, both apps
 ```
 
-All three should pass. CI runs the first two on every pull request, and a red
-check will block your merge.
+All three should pass. **CI runs all three** on every pull request, and a red
+check will block your merge. (An earlier version of this guide said CI skipped
+the tests. That is no longer true — see Section 7.)
 
 ### What happens next
 
@@ -594,6 +658,19 @@ cp apps/web/.env.example apps/web/.env.local
 
 The default (`NEXT_PUBLIC_API_URL=http://localhost:4000`) is correct for local
 work. No trailing slash.
+
+There is a second setting, `NEXT_PUBLIC_GOOGLE_SIGN_IN`, which decides whether
+the "Continue with Google" button is drawn on the first paint. **Leave it
+`false`** unless you have been given Google credentials. The API's
+`/auth/providers` endpoint is authoritative and corrects a wrong value within one
+request, so this is a hint rather than a switch.
+
+> **Google sign-in does not work locally by default.** It needs
+> `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_REDIRECT_URI` in
+> `apps/api/.env`, and those are real credentials tied to registered redirect
+> URLs. Without them the button is simply hidden — that is correct behaviour, not
+> a bug. Register with email and password instead, or ask a maintainer
+> (Section 11).
 
 ### 9.5 Build the database
 
@@ -765,8 +842,8 @@ Include all six. A report missing the first three usually cannot be acted on.
 
 ```
 What I did:        Step by step, so someone else can repeat it.
-What I expected:   
-What happened:     
+What I expected:
+What happened:
 Where:             Local, or faceoff.akwannya-hub.org
 Browser and OS:    e.g. Chrome 130 on Windows 11
 Evidence:          Screenshot, and any red text from the browser console
@@ -803,9 +880,40 @@ the issue triage owner and the expected response time.*
 Written for volunteers and assistants joining the Face-Off project.
 
 Every factual claim was verified against the repository, the live deployment, or
-git output on **30 September 2026**. Version numbers come from the `package.json`
+git output on **13 October 2026**. Version numbers come from the `package.json`
 files, routes from the source tree, and branches from `git branch`. Anything that
 could not be verified is marked as such in place.
+
+### What changed in the 13 October revision
+
+The previous revision was written on 30 September. In the two weeks between, three
+features shipped and the test setup changed, so several claims had gone stale:
+
+- **Password reset is finished.** It was listed as "no page in the UI"; both
+  `/forgot-password` and `/reset-password` now exist.
+- **Sign in with Google** shipped and was missing entirely.
+- **In-app notifications** shipped. They were in the "not yet started" list.
+- **Team join requests** shipped.
+- **CI now runs the tests.** The old guide said it ran lint and typecheck only,
+  and warned that a broken test could merge. That warning no longer applies.
+- **The frontend has tests now** — Jest, 8 files in `apps/web/lib`. The old guide
+  said there was no frontend test runner.
+- Backend test count went from 22 to **31**.
+- **Round editing is finished.** The old guide said only pause and end were
+  exposed; the full `PATCH /rounds/:id` form now exists, along with weight
+  changes, delete, finalize, unlock and archive.
+- **The System page claim was wrong.** It shows dependency health and user
+  management; it has never shown queue depth, and there is still no live view of
+  the grading queue.
+- The branch list went from 3 branches to 14.
+- A `loadtest/` kit and a performance report were added at the repository root.
+- The database's distance from the API is now measured and documented, because it
+  makes the live site visibly slower than a local setup.
+
+Unchanged and re-verified: all version numbers, the local ports (5433 and 6380),
+the `COOKIE_DOMAIN` trap, Judge0 not running locally, `pnpm test:e2e` still
+failing because `apps/api/test/` does not exist, and challenge content still not
+being editable after creation.
 
 If something here is wrong or out of date, correcting it is a genuinely useful
 first contribution, and the workflow in Section 8 is how you do it.
