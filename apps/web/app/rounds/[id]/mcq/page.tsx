@@ -13,6 +13,7 @@ import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
 import { useCountdown, useMcqProgress, useRound } from '@/lib/hooks';
 import { RoundRules } from '@/components/round-rules';
+import { RoundClosed, isRoundClosed } from '@/components/round-exit';
 import type { Challenge, McqSubmitResponse } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -61,7 +62,7 @@ function Question({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      className="panel hairline p-6"
+      className="panel hairline p-4 sm:p-6"
       aria-labelledby={`q-${challenge.id}`}
     >
       <div className="flex items-center justify-between gap-3">
@@ -217,7 +218,7 @@ function McqRound({ roundId }: { roundId: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Round unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">
           {error instanceof ApiError ? error.displayMessage : 'Please try again.'}
@@ -233,7 +234,7 @@ function McqRound({ roundId }: { roundId: string }) {
 
     if (resultsQuery.error) {
       return (
-        <div className="panel p-10 text-center">
+        <div className="panel p-6 sm:p-10 text-center">
           <h1 className="text-lg">Results not available yet</h1>
           <p className="mt-2 text-[14px] text-ink-dim">
             {resultsQuery.error instanceof ApiError
@@ -271,6 +272,15 @@ function McqRound({ roundId }: { roundId: string }) {
       </header>
 
       <RoundRules round={round} />
+
+      {/* The round ending is a different thing from finishing every question,
+          and only the second was handled. Someone whose round was ended by the
+          organizer mid-way saw no change but a badge. */}
+      {isRoundClosed(round.state) && (
+        <div className="mb-6">
+          <RoundClosed competitionId={round.competitionId} state={round.state} />
+        </div>
+      )}
 
       {progress && progress.totalQuestions > 0 &&
         progress.answeredCount >= progress.totalQuestions && (
@@ -316,7 +326,7 @@ function RoundComplete({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="panel hairline bracketed mb-6 p-6 text-center"
+      className="panel hairline bracketed mb-6 p-4 sm:p-6 text-center"
       role="status"
     >
       <div
@@ -380,7 +390,7 @@ function McqResultsView({ data }: { data: McqResults }) {
 
       <ul className="space-y-3">
         {data.attempts.map((attempt) => (
-          <li key={attempt.challenge.id} className="panel hairline p-5">
+          <li key={attempt.challenge.id} className="panel hairline p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-[17px] leading-snug">{attempt.question.prompt}</h2>
               <Badge tone={attempt.isCorrect ? 'success' : 'neutral'}>
@@ -435,7 +445,7 @@ function QuestionList({ roundId, answeredIds }: { roundId: string; answeredIds: 
     retry: false,
   });
 
-  if (isLoading) return <Skeleton className="h-64 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
   if (!data) return null;
 
   return (
@@ -474,7 +484,7 @@ function LoadedQuestion({
     retry: false,
   });
 
-  if (isLoading) return <Skeleton className="h-64 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-64 w-full rounded-xl" />;
   if (!data) return null;
 
   return (

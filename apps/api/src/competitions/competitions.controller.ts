@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -46,8 +49,21 @@ export class CompetitionsController {
 
   @Patch(':id')
   @Roles(Role.ORGANIZER)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCompetitionDto) {
-    return this.competitions.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCompetitionDto,
+    @CurrentUser('id') actorId: string,
+  ) {
+    return this.competitions.update(id, dto, actorId);
+  }
+
+  /// Draft competitions only. The service rejects anything else with a 409,
+  /// because a competition that has run owns participants' recorded work.
+  @Delete(':id')
+  @Roles(Role.ORGANIZER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.competitions.remove(id);
   }
 
   @Post(':id/join')

@@ -7,6 +7,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
 import { Button } from '@/components/ui/button';
+import { TeamJoinRequests } from '@/components/team-join-requests';
+import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SkeletonRows } from '@/components/ui/skeleton';
@@ -196,7 +198,7 @@ function TeamView({ id }: { id: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Team unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">{message(error, 'Please try again.')}</p>
         <Link href="/dashboard" className="mt-5 inline-block">
@@ -213,51 +215,54 @@ function TeamView({ id }: { id: string }) {
 
   return (
     <>
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-3xl">{team.name}</h1>
-            {isCaptain && <Badge tone="brand">You captain this team</Badge>}
-          </div>
-          <p className="mt-1.5 text-[15px] text-ink-dim">
-            {team.members.length} {team.members.length === 1 ? 'member' : 'members'}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/leaderboard/${team.competitionId}`}>
-            <Button variant="secondary">Leaderboard</Button>
-          </Link>
-          {/* A lone captain leaving IS a disband, so say so — searching for
-              "delete" and finding only "leave" reads as no option at all. */}
-          {isMember && isCaptain && team.members.length === 1 && (
-            <Button variant="danger" onClick={() => setConfirmLeave(true)}>
-              Disband team
-            </Button>
-          )}
-
-          {/* A captain with members gets both: step out, or end the team. */}
-          {isMember && isCaptain && team.members.length > 1 && (
-            <>
-              <Button variant="secondary" onClick={() => setConfirmLeave(true)}>
-                Leave team
-              </Button>
-              <Button variant="danger" onClick={() => setConfirmDisband(true)}>
+      <PageHeader
+        title={team.name}
+        badge={isCaptain ? <Badge tone="brand">You captain this team</Badge> : undefined}
+        subtitle={`${team.members.length} ${team.members.length === 1 ? 'member' : 'members'}`}
+        actions={
+          <>
+            <Link href={`/leaderboard/${team.competitionId}`}>
+              <Button variant="secondary">Leaderboard</Button>
+            </Link>
+            {/* A lone captain leaving IS a disband, so say so — searching for
+                "delete" and finding only "leave" reads as no option at all. */}
+            {isMember && isCaptain && team.members.length === 1 && (
+              <Button variant="danger" onClick={() => setConfirmLeave(true)}>
                 Disband team
               </Button>
-            </>
-          )}
+            )}
 
-          {isMember && !isCaptain && (
-            <Button variant="danger" onClick={() => setConfirmLeave(true)}>
-              Leave team
-            </Button>
-          )}
-        </div>
-      </header>
+            {/* A captain with members gets both: step out, or end the team. */}
+            {isMember && isCaptain && team.members.length > 1 && (
+              <>
+                <Button variant="secondary" onClick={() => setConfirmLeave(true)}>
+                  Leave team
+                </Button>
+                <Button variant="danger" onClick={() => setConfirmDisband(true)}>
+                  Disband team
+                </Button>
+              </>
+            )}
+
+              {isMember && !isCaptain && (
+                <Button variant="danger" onClick={() => setConfirmLeave(true)}>
+                  Leave team
+                </Button>
+              )}
+          </>
+        }
+      />
+
+      {/* Above the invite code: a captain with people waiting should answer them
+          before reaching for the code. */}
+      <TeamJoinRequests
+        teamId={team.id}
+        competitionId={team.competitionId}
+        isCaptain={isCaptain}
+      />
 
       {isMember && team.code && (
-        <section className="panel hairline bracketed mb-5 flex flex-wrap items-center justify-between gap-4 p-5">
+        <section className="panel hairline bracketed mb-5 flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
               Invite code

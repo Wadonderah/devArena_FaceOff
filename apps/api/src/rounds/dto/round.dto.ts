@@ -152,3 +152,13 @@ export class SetRoundChallengesDto {
   @Type(() => String)
   challengeIds!: string[];
 }
+
+/// Weight on its own, because changing it is a different operation from editing
+/// a round: it is permitted later in a round's life than content edits are, and
+/// it rewrites every score already recorded for that round.
+export class SetRoundWeightDto {
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(1)
+  weight!: number;
+}

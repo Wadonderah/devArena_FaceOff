@@ -67,8 +67,27 @@ describe('round state machine', () => {
       expect(canTransition(RoundState.PAUSED, RoundState.FINALIZED)).toBe(false);
     });
 
-    it('never reopens a finalized round', () => {
-      expect(allowedTransitions(RoundState.FINALIZED)).toEqual([RoundState.ARCHIVED]);
+    it('lets a finalized round be unlocked for correction', () => {
+      expect(allowedTransitions(RoundState.FINALIZED)).toEqual([
+        RoundState.COMPLETED,
+        RoundState.ARCHIVED,
+      ]);
+    });
+
+    // The point of the unlock is to reopen SCORING, never submissions. These two
+    // assertions together are what make that true, and they are the reason the
+    // transition is safe to allow at all: a round stepped back to COMPLETED is
+    // still closed to participants.
+    it('never returns a finalized round to a state that accepts work', () => {
+      expect(canTransition(RoundState.FINALIZED, RoundState.LIVE)).toBe(false);
+      expect(canTransition(RoundState.FINALIZED, RoundState.PAUSED)).toBe(false);
+      expect(canTransition(RoundState.FINALIZED, RoundState.SCHEDULED)).toBe(false);
+      expect(canTransition(RoundState.FINALIZED, RoundState.DRAFT)).toBe(false);
+    });
+
+    it('leaves an unlocked round closed to submissions', () => {
+      expect(canTransition(RoundState.FINALIZED, RoundState.COMPLETED)).toBe(true);
+      expect(acceptsSubmissions(RoundState.COMPLETED)).toBe(false);
     });
   });
 

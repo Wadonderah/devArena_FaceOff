@@ -22,7 +22,14 @@ export function middleware(request: NextRequest) {
     // without listing every chunk; 'unsafe-eval' is for dev-only source maps.
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: blob:`,
+    // googleusercontent is where Google hosts profile photos. Narrow on
+    // purpose: it is one host pattern, not a wildcard, and it is the only
+    // external origin this app loads anything from.
+    //
+    // Without it a Google avatar is blocked with nothing on screen and only a
+    // console violation to explain it — which looks exactly like "the avatar
+    // feature is broken".
+    `img-src 'self' data: blob: https://*.googleusercontent.com`,
     `font-src 'self'`,
     // ws: is the dev-server HMR socket.
     `connect-src 'self' ${apiOrigin}${isDev ? ' ws: wss:' : ''}`,

@@ -7,35 +7,32 @@ const ALLOWED: Record<RoundState, RoundState[]> = {
   [RoundState.DRAFT]: [RoundState.SCHEDULED],
   [RoundState.SCHEDULED]: [RoundState.DRAFT, RoundState.LIVE],
 
-  // PAUSED is reversible — a projector failing or a fire alarm should not end a
-  // round. COMPLETED remains reachable directly for the ordinary case.
+  // PAUSED is reversible: a fire alarm should not end a round.
   [RoundState.LIVE]: [RoundState.PAUSED, RoundState.COMPLETED],
   [RoundState.PAUSED]: [RoundState.LIVE, RoundState.COMPLETED],
 
-  // FINALIZED locks the scores. Archiving straight from COMPLETED stays possible
-  // for rounds nobody needs to certify.
+  // FINALIZED locks the scores, and may step back to COMPLETED so a published
+  // mistake can be corrected. That is NOT a route back to LIVE — unlocking
+  // reopens scoring, never submissions, so nobody can add work after seeing
+  // the standings.
   [RoundState.COMPLETED]: [RoundState.FINALIZED, RoundState.ARCHIVED],
-  [RoundState.FINALIZED]: [RoundState.ARCHIVED],
+  [RoundState.FINALIZED]: [RoundState.COMPLETED, RoundState.ARCHIVED],
   [RoundState.ARCHIVED]: [],
 };
 
-/// A round accepting submissions. PAUSED deliberately is not one — but it is
-/// also not closed, and the two must be reported differently.
+/// PAUSED is not accepting submissions, but is not closed either; the two must
+/// be reported differently.
 export function acceptsSubmissions(state: RoundState): boolean {
   return state === RoundState.LIVE;
 }
 
-/// Once finalized, no score may change. This is what makes a published result
-/// trustworthy rather than merely current.
+/// Once finalized, no score may change.
 export function scoresAreLocked(state: RoundState): boolean {
   return state === RoundState.FINALIZED || state === RoundState.ARCHIVED;
 }
 
-/// A round whose answers may be shown: it has ended and will not reopen.
-///
-/// Named here so the three "is it over yet" states stay in one place. The MCQ
-/// results gate listed COMPLETED and ARCHIVED by hand and missed FINALIZED
-/// when it was added — so finalizing a round hid its results from everyone.
+/// A round whose answers may be shown: ended and will not reopen. Named so the
+/// three "is it over" states stay in one place rather than being listed by hand.
 export function hasClosed(state: RoundState): boolean {
   return (
     state === RoundState.COMPLETED ||

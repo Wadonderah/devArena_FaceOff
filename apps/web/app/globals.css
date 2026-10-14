@@ -1,13 +1,9 @@
 @import 'tailwindcss';
 
 /*
-  Design tokens, sourced from akwannya-hub.org's own compiled stylesheet:
-  teal #2d938c (the parent site's focus-ring colour) over navy, with orange
-  #fc7606 as the single accent.
-
-  @theme declares the DARK values, which are also the defaults. The light theme
-  below re-points the same custom properties, so every component follows without
-  a single conditional class — a component never asks which theme is active.
+  Design tokens from akwannya-hub.org: teal #2d938c over navy, orange #fc7606
+  as the accent. @theme declares the DARK values; the light theme re-points the
+  same properties, so no component asks which theme is active.
 */
 @theme {
   /* Navy surfaces, matching the dark gradient sections on akwannya-hub.org. */
@@ -30,8 +26,10 @@
   --color-brand-deep: #0a7c78;
   --color-brand-dim: #086560;
 
-  /* Orange is reserved for "happening now" and nothing else — a single colour
-     carrying one meaning is what makes a live state actually register. */
+  /* Orange has two jobs, kept apart so the second does not weaken the first:
+       STATE  "happening now" — badges and status markers only, always with motion.
+       BRAND  the second half of the face-off mark — structural only: a panel
+              edge, the monogram. Never a badge, text or number. */
   --color-live: #fc7606;
   --color-live-soft: #fda85c;
 
@@ -42,14 +40,45 @@
   --color-warn: #fda85c;
   --color-danger: #dc2626;
 
+  /* Podium metals, leaderboard only. Declared as --color-* so Tailwind emits
+     utilities for them; muted because saturated metals on navy read as a toy. */
+  --color-medal-gold: #e0b252;
+  --color-medal-silver: #aab6c6;
+  --color-medal-bronze: #bf7f4f;
+
   --font-display: var(--font-display-family), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, 'SF Mono', monospace;
 
-  /* Rounder than before. All four references sit noticeably softer than 14px,
-     and radius is one of the cheapest polish levers there is. */
-  --radius-card: 18px;
-  --radius-panel: 24px;
+  /*
+    Fluid type scale. Redefines what `text-lg`…`text-3xl` MEAN rather than
+    asking ~47 call sites to remember a responsive variant. Every clamp's max
+    is Tailwind's original, so this only ever shrinks small viewports:
+    at 390px text-lg 16, text-xl 17, text-2xl 20, text-3xl 24.
+  */
+  --text-lg: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-xl: clamp(1.0625rem, 0.98rem + 0.4vw, 1.25rem);
+  --text-2xl: clamp(1.25rem, 1.1rem + 0.7vw, 1.5rem);
+  --text-3xl: clamp(1.5rem, 1.25rem + 1.1vw, 1.875rem);
+
+  /*
+    Radius scale. Redefines Tailwind's own steps so the ~110 existing
+    `rounded-*` classes all tighten at once: sm 3, md 4, lg 6, xl 8, 2xl 10,
+    3xl 12. `rounded-full` is for shapes that are genuinely round — dots,
+    spinners, avatars, progress tracks, badges. Not buttons.
+  */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
+
+  /* Controls sit tighter than the surfaces that contain them, which is what
+     produces hierarchy rather than a uniform softness everywhere. */
+  --radius-control: 5px;
+  --radius-card: 8px;
+  --radius-panel: 10px;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -79,13 +108,8 @@
   --arena-dust: rgba(199, 210, 232, 0.9);
 }
 
-/*
-  Light theme. Applied by [data-theme="light"] on <html>, set before first paint
-  by the inline script in layout.tsx so there is no flash of the wrong theme.
-
-  The brand darkens from #2d938c to #0a7c78 here: the mid teal only reaches about
-  3.4:1 against white, which fails text contrast. The deep teal clears 4.5:1.
-*/
+/* Light theme. Applied by [data-theme="light"] on <html>, set before first
+   paint by the inline script in layout.tsx so there is no flash. */
 [data-theme='light'] {
   --color-surface-0: #f4f6fb;
   --color-surface-1: #ffffff;
@@ -94,6 +118,12 @@
   --color-surface-4: #dde5f0;
   --color-line: #dbe3ef;
   --color-line-bright: #c2cede;
+
+  /* Darkened for contrast: the dark theme's metals are legible on navy and
+     wash out completely on #f4f6fb. */
+  --color-medal-gold: #a97b1f;
+  --color-medal-silver: #6b7686;
+  --color-medal-bronze: #8a5a31;
 
   --color-ink: #0f172a;
   --color-ink-dim: #47566e;
@@ -158,64 +188,24 @@
   }
 
   /*
-    Four stacked layers instead of a pair of symmetric blur blobs. The blobs are
-    what make a dark page read as generic: perfectly even, no texture, no
-    direction. Here the light comes from one corner, a technical grid gives the
-    surface structure, and film grain breaks up the flat fill.
-  */
-  /*
-    Real graph paper has two rules — a fine grid with a heavier line every fifth
-    division — plus the faint marks where you'd plot a point. A single-scale grid
-    reads as a texture; two scales read as a surface you could measure on.
-  */
-  /*
-    The app's surface. Previously two-scale graph paper with plotted nodes,
-    which read as a technical texture pinned behind the interface rather than a
-    space the interface sits in — and it fought the arena on the landing page.
-
-    Now: one off-centre key light, a warm counter-light opposite for depth, and
-    film grain. No repeating rule, so nothing competes with a table or a form.
+    One flat fill, no gradient. An application page is a stack of panels each a
+    step lighter than the page; when the page itself changes value top to bottom
+    those panels disagree with their background by a different amount at every
+    scroll position, which reads as a faint unevenness. Depth comes from the
+    surface ladder instead. The landing page is unaffected — `.sky` below is
+    fixed and self-contained.
   */
   body {
     position: relative;
-    background:
-      radial-gradient(1200px 620px at 78% -12%, var(--key-light), transparent 60%),
-      radial-gradient(620px 420px at 4% 104%, var(--counter-light), transparent 64%),
-      linear-gradient(to bottom, var(--arena-sky-top), var(--color-surface-0) 62%);
-    background-attachment: fixed;
+    background: var(--color-surface-0);
     color: var(--color-ink);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     min-height: 100dvh;
   }
 
-  /*
-    Film grain. The single most effective thing against a flat digital fill —
-    real surfaces have noise. Generated by SVG rather than shipped as an image,
-    so it costs nothing to download and scales to any viewport.
-  */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    opacity: var(--grain-opacity);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-
-  /* Content sits above the grain. */
-  body > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  /*
-    Display type is set lighter and tighter than before. The references all run
-    large sizes at medium weight with negative tracking; the previous 600 at
-    -0.02em read dense next to them. The hero keeps its bold treatment
-    explicitly — that is the one place weight is doing identity work.
-  */
+  /* Display face, lighter and tighter than the body stack. The hero sets its
+     own weight explicitly — that is the one place weight does identity work. */
   h1, h2, h3, h4 {
     font-family: var(--font-display);
     letter-spacing: -0.03em;
@@ -248,14 +238,17 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Flat, not a gradient.
+
+     The previous two-stop vertical gradient was doing the same job as the
+     border and the surface step already do, and a gradient-filled card is one
+     of the more recognisable generated-UI signatures. A single surface with a
+     hairline border reads as more deliberate and lets nesting (surface-1 inside
+     surface-0, surface-2 inside that) carry the depth instead. */
   .panel {
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-surface-2) 92%, transparent),
-      var(--color-surface-1)
-    );
+    background: var(--color-surface-1);
     border: 1px solid var(--color-line);
-    border-radius: var(--radius-card);
+    border-radius: var(--radius-panel);
   }
 
   .hairline {
@@ -344,13 +337,8 @@
     Nodes sit at the major intersections, and the whole thing is radially masked
     so it dissolves rather than stopping at a hard edge.
   */
-  /*
-    The landing page's sky (components/sky.tsx). Covers the body's graph paper
-    entirely: a deep top-to-bottom gradient, one teal key light where the arena
-    sits, a faint warm counter-light low on the opposite side, then the same
-    film grain the rest of the app wears — noise is what keeps a gradient from
-    reading as a screen saver.
-  */
+  /* The landing page's backdrop (components/sky.tsx). Fixed and self-contained:
+     its own gradients and its own grain, independent of `body`. */
   .sky {
     position: fixed;
     inset: 0;
@@ -419,21 +407,10 @@
   }
 }
 
-/*
-  Plain CSS, deliberately outside @layer utilities. Tailwind v4 only emits
-  single-class utilities from that layer, so the compound selectors below
-  ([data-theme] descendants, :has) were silently discarded when they lived
-  there — the class rendered on the element and matched nothing.
-*/
-/*
-  The landing page's inset frame (reference 3). Content sits in a rounded
-  container a little in from the viewport edge, floating on a deeper backdrop,
-  so the page reads as a surface rather than as the window itself.
-
-  Light mode only: on dark the effect is invisible — there is not enough
-  separation between a near-black backdrop and a near-black page — and the
-  signed-in shell has a sticky header that would fight the rounded corner.
-*/
+/* Outside @layer utilities on purpose: Tailwind v4 only emits utilities whose
+   class names it finds in source, and it does not parse compound selectors. */
+/* The landing page's inset frame. Content sits in a rounded panel with the sky
+   showing around it. */
 .page-frame {
   border-radius: 0;
 }
@@ -444,12 +421,7 @@
   overflow: clip;
 }
 
-/*
-  The sky is `position: fixed`, so it spans the viewport and would paint over
-  the frame's gutter — the inset would be invisible. Insetting and rounding the
-  sky itself makes it the framed surface rather than something the frame has to
-  fight, and it stays fixed while the content scrolls past.
-*/
+/* `.sky` is fixed, so it would paint over the frame's margin without this. */
 [data-theme='light'] .sky {
   inset: 10px;
   border-radius: 28px;
@@ -465,6 +437,12 @@
   border-radius: var(--radius-panel);
 }
 
+/* Interactive controls, tighter than the surfaces holding them. Written out
+   rather than relied on as a generated utility, matching .rounded-panel above. */
+.rounded-control {
+  border-radius: var(--radius-control);
+}
+
 /*
   The arena used as a backdrop. `overflow-hidden` on the hero section would
   otherwise cut the bowl off with a hard horizontal edge; masking it to
@@ -476,14 +454,8 @@
   mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 99%);
 }
 
-/*
-  A wash of the page's own background behind the hero copy.
-
-  The arena is deliberately busy — dashed seat rows, orbit rings, a light
-  column — and text sitting directly on it loses contrast exactly where the
-  rings cross a line of type. Feathering the background back in under the copy
-  keeps the stage visible around it without asking the reader to work.
-*/
+/* A wash of the page background behind the hero copy, so the arena rings never
+   cross a line of type. */
 .hero-scrim {
   background: radial-gradient(
     70% 78% at 50% 46%,

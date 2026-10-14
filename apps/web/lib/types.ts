@@ -92,6 +92,10 @@ export interface CompetitionListItem {
   name: string;
   description: string | null;
   state: CompetitionState;
+  // Returned by the API's participant list but previously absent here, so the
+  // dashboard had no way to tell anyone when registration actually closes.
+  registrationOpensAt: string | null;
+  registrationClosesAt: string | null;
   _count?: { participants: number };
 }
 
@@ -272,4 +276,77 @@ export interface Overview {
   pendingSubmissions: number;
   failedSubmissions: number;
   liveRounds: number;
+}
+
+/// Mirrors NotificationType in the Prisma schema.
+///
+/// The last three are declared but not emitted yet — the team join-request
+/// flow lands next. They are here so the union does not have to change again.
+export type NotificationType =
+  | 'ANNOUNCEMENT'
+  /// Sent to every account, not to a competition's participants — when it
+  /// fires there are none, which is the point of it.
+  | 'COMPETITION_OPEN'
+  | 'TEAM_JOINED'
+  | 'ROUND_STARTED'
+  | 'ROUND_ENDED'
+  | 'GRADING_ALERT'
+  | 'TEAM_JOIN_REQUEST'
+  | 'TEAM_REQUEST_APPROVED'
+  | 'TEAM_REQUEST_DECLINED';
+
+/// Named `AppNotification` rather than `Notification`: the latter is a DOM
+/// global, and shadowing it would make every `Notification` in a component file
+/// ambiguous to a reader even where TypeScript resolves it correctly.
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  /// App-relative, or null for a row that is not clickable. Still passed
+  /// through `safeNotificationLink` before it is followed.
+  linkUrl: string | null;
+  metadata: Record<string, unknown> | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/// Shape of GET /notifications.
+export interface NotificationPage {
+  items: AppNotification[];
+  unreadCount: number;
+  /// Pass back as `?before=` for the next page. Null means this was the last.
+  nextCursor: string | null;
+}
+
+/// A team as it appears in a competition's team list.
+export interface TeamListItem {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  captainId: string;
+  captainName: string | null;
+  /// Whether the viewer has already asked to join this one.
+  pendingRequest: boolean;
+  _count: { members: number };
+}
+
+export interface TeamJoinRequest {
+  id: string;
+  createdAt: string;
+  message: string | null;
+  user: {
+    id: string;
+    profile: { displayName: string; avatarUrl: string | null; country: string | null } | null;
+  };
+}
+
+/// A team the viewer belongs to, as returned by GET /teams/mine.
+export interface MyTeam {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  competitionId: string;
+  competitionName: string;
+  competitionState: CompetitionState;
 }

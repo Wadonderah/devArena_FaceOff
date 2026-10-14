@@ -31,6 +31,9 @@ export const metadata: Metadata = {
     template: '%s · Face-Off',
   },
   description: 'Learn. Build. Compete. Prove your engineering skills.',
+  // Served from apps/web/public/, so the URL is /icon.png — `public` never
+  // appears in the path. A path of /public/icon.png 404s.
+  icons: '/icon.png',
 };
 
 export const viewport: Viewport = {

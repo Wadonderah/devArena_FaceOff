@@ -9,10 +9,13 @@ import { CodeEditor } from '@/components/code-editor';
 import { Button } from '@/components/ui/button';
 import { Badge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
-import { api, ApiError } from '@/lib/api';
+import { api, describeError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
-import { useCountdown, useRound, useSubmission } from '@/lib/hooks';
+import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
+import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
+import { RoundClosed, RoundExitLinks, isRoundClosed } from '@/components/round-exit';
+import { GradingFailed } from '@/components/grading-failed';
 import type { Challenge, Language, RunResult } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { LANGUAGE_LABELS } from '@/lib/taxonomy';
@@ -39,7 +42,15 @@ function OutcomePill({ passed, label }: { passed: boolean; label: string }) {
   );
 }
 
-function SubmissionPanel({ submissionId }: { submissionId: string }) {
+function SubmissionPanel({
+  submissionId,
+  onRetry,
+  retrying,
+}: {
+  submissionId: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
   const { data } = useSubmission(submissionId);
 
   if (!data) return <Skeleton className="h-24 w-full rounded-xl" />;
@@ -61,11 +72,7 @@ function SubmissionPanel({ submissionId }: { submissionId: string }) {
   }
 
   if (data.status === 'SYSTEM_ERROR') {
-    return (
-      <div role="alert" className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3.5">
-        <p className="text-[14px] text-warn">{data.errorMessage}</p>
-      </div>
-    );
+    return <GradingFailed onRetry={onRetry} retrying={retrying} />;
   }
 
   const passed = data.passedTests ?? 0;
@@ -176,6 +183,7 @@ function Problem({
   const [code, setCode] = useState('');
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [runResults, setRunResults] = useState<RunResult[] | null>(null);
+  const [seeded, setSeeded] = useState(false);
   const queryClient = useQueryClient();
   const toast = useToast();
 
@@ -185,11 +193,35 @@ function Problem({
     retry: false,
   });
 
-  // Seed the editor from starter code when the challenge loads or the language
-  // changes, without clobbering work already typed for the same language.
+  const { data: me } = useCurrentUser();
+
+  const draft = useDraft({
+    userId: me?.id,
+    challengeId,
+    language,
+    value: code,
+    // Nothing is saved until the editor has been seeded, or the first render
+    // would write an empty string over a stored draft before restore runs.
+    ready: seeded,
+  });
+
+  // Seed the editor when the challenge loads or the language changes.
+  //
+  // A stored draft wins over the starter code: if someone was signed out
+  // mid-round, or closed the tab, the work they already did is what they expect
+  // to find — being handed a blank template instead is the thing this whole
+  // change exists to prevent.
   useEffect(() => {
-    if (challenge) setCode(starterFor(challenge, language));
-  }, [challenge, language]);
+    if (!challenge) return;
+
+    setSeeded(false);
+    const saved = draft.restore();
+    setCode(saved ?? starterFor(challenge, language));
+    setSeeded(true);
+    // `draft` is intentionally omitted: restore() is keyed on the same values
+    // this effect already depends on, and including it re-seeds on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challenge, language, me?.id]);
 
   const run = useMutation({
     mutationFn: () =>
@@ -213,18 +245,20 @@ function Problem({
       // Grading is asynchronous, so without this the button just stops spinning
       // and nothing visibly happens until the poll returns a verdict.
       toast.success('Submitted for grading', 'Your result appears below when the judge finishes.');
+      // Safely on the server now, so a stale local copy must not resurface over
+      // a later attempt.
+      draft.clear();
       setSubmissionId(data.id);
       setRunResults(null);
       queryClient.invalidateQueries({ queryKey: ['my-submissions', roundId] });
     },
-    onError: (error) =>
-      toast.error(
-        'Submission refused',
-        error instanceof ApiError ? error.displayMessage : undefined,
-      ),
+    onError: (error) => {
+      const { title, detail } = describeError(error, 'Submission refused');
+      toast.error(title, detail);
+    },
   });
 
-  if (isLoading) return <Skeleton className="h-96 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (!challenge?.codingChallenge) return null;
 
   const coding = challenge.codingChallenge;
@@ -233,7 +267,15 @@ function Problem({
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-      <section className="panel hairline max-h-[calc(100dvh-9rem)] overflow-y-auto p-6 lg:sticky lg:top-20">
+      {/* The scroll container is desktop-only.
+          
+          On a phone the two panels stack, so capping the problem statement at a
+          viewport height and giving it its own scrollbar created a nested
+          scroll area: flicking inside it moved the statement, flicking just
+          outside moved the page, and reaching the editor meant scrolling
+          through the whole problem first. Stacked, it should simply be as tall
+          as it needs to be and let the page scroll. */}
+      <section className="panel hairline p-4 sm:p-6 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-xl">{challenge.title}</h2>
           <span className="shrink-0 text-[13px] text-ink-faint">{challenge.points} pts</span>
@@ -290,7 +332,7 @@ function Problem({
                 aria-pressed={language === lang}
                 onClick={() => setLanguage(lang)}
                 className={cn(
-                  'rounded-[7px] px-3 py-1.5 text-[13px] transition-colors duration-150',
+                  'rounded-md px-3 py-1.5 text-[13px] transition-colors duration-150',
                   language === lang
                     ? 'bg-surface-3 text-ink'
                     : 'text-ink-dim hover:text-ink',
@@ -315,12 +357,21 @@ function Problem({
 
         {error && (
           <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3.5 py-2.5 text-[14px] text-danger">
-            {error instanceof ApiError ? error.displayMessage : 'Something went wrong.'}
+            {describeError(error).detail}
           </p>
         )}
 
         <AnimatePresence mode="wait">
-          {submissionId && <SubmissionPanel key={submissionId} submissionId={submissionId} />}
+          {submissionId && (
+            <SubmissionPanel
+              key={submissionId}
+              submissionId={submissionId}
+              // Resubmits the editor's current contents, so a participant who
+              // tweaked something after the failure retries what they can see.
+              onRetry={() => submit.mutate()}
+              retrying={submit.isPending}
+            />
+          )}
           {runResults && <RunResults key="run" results={runResults} />}
         </AnimatePresence>
       </section>
@@ -347,10 +398,10 @@ function CodingRound({ roundId }: { roundId: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Round unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">
-          {error instanceof ApiError ? error.displayMessage : 'Please try again.'}
+          {describeError(error, 'Round unavailable').detail}
         </p>
       </div>
     );
@@ -376,7 +427,11 @@ function CodingRound({ roundId }: { roundId: string }) {
         )}
       </header>
 
-      <RoundRules round={round} />
+      {isRoundClosed(round.state) ? (
+        <RoundClosed competitionId={round.competitionId} state={round.state} />
+      ) : (
+        <>
+          <RoundRules round={round} />
 
       {ids && ids.challengeIds.length > 1 && (
         <nav aria-label="Problems" className="mb-5 flex flex-wrap gap-2">
@@ -407,6 +462,10 @@ function CodingRound({ roundId }: { roundId: string }) {
           languages={round.allowedLanguages.length > 0 ? round.allowedLanguages : ['PYTHON']}
         />
       )}
+        </>
+      )}
+
+      <RoundExitLinks competitionId={round.competitionId} />
     </>
   );
 }

@@ -10,7 +10,7 @@
     "build": "pnpm --recursive --filter \"./apps/*\" build",
     "lint": "pnpm --recursive --filter \"./apps/*\" lint",
     "typecheck": "pnpm --recursive --filter \"./apps/*\" typecheck",
-    "test": "pnpm --filter api test",
+    "test": "pnpm --recursive --filter \"./apps/*\" test",
     "db:migrate": "pnpm --filter api db:migrate",
     "db:seed": "pnpm --filter api db:seed",
     "infra:up": "docker compose -f docker-compose.dev.yml up -d",

@@ -11,6 +11,7 @@ import { Field } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select';
 import { TextAreaField } from '@/components/ui/textarea';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/cn';
@@ -168,7 +169,7 @@ function McqForm({ onDone }: { onDone: () => void }) {
               required
               value={text}
               onChange={(e) => setTexts(texts.map((t, j) => (j === i ? e.target.value : t)))}
-              className="h-10 flex-1 rounded-[10px] border border-line bg-surface-1 px-3 text-[14px] text-ink focus:border-brand focus:outline-none"
+              className="h-10 flex-1 rounded-lg border border-line bg-surface-1 px-3 text-[14px] text-ink focus:border-brand focus:outline-none"
             />
           </div>
         ))}
@@ -566,7 +567,7 @@ function DebuggingForm({ onDone }: { onDone: () => void }) {
                 placeholder="filename.py"
                 aria-label={`Context file ${i + 1} name`}
                 onChange={(e) => setFile(i, { name: e.target.value })}
-                className="h-9 flex-1 rounded-[10px] border border-line bg-surface-0 px-3 font-mono text-[13px] text-ink focus:border-brand focus:outline-none"
+                className="h-9 flex-1 rounded-lg border border-line bg-surface-0 px-3 font-mono text-[13px] text-ink focus:border-brand focus:outline-none"
               />
               <Button
                 type="button"
@@ -717,40 +718,38 @@ function ChallengesContent() {
 
   return (
     <>
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl">Challenge library</h1>
-          <p className="mt-1.5 text-[15px] text-ink-dim">
-            Author questions and problems, then publish them for use in rounds.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/admin/challenges/import">
-            <Button variant="secondary">Import from document</Button>
-          </Link>
-          <Button
-            variant={creating === 'MCQ' ? 'primary' : 'secondary'}
-            onClick={() => setCreating(creating === 'MCQ' ? null : 'MCQ')}
-          >
-            New question
-          </Button>
-          <Button
-            variant={creating === 'CODING' ? 'primary' : 'secondary'}
-            onClick={() => setCreating(creating === 'CODING' ? null : 'CODING')}
-          >
-            New problem
-          </Button>
-          <Button
-            variant={creating === 'DEBUGGING' ? 'primary' : 'secondary'}
-            onClick={() => setCreating(creating === 'DEBUGGING' ? null : 'DEBUGGING')}
-          >
-            New bug hunt
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="Challenge library"
+        subtitle="Author questions and problems, then publish them for use in rounds."
+        actions={
+          <>
+            <Link href="/admin/challenges/import">
+              <Button variant="secondary">Import from document</Button>
+            </Link>
+            <Button
+              variant={creating === 'MCQ' ? 'primary' : 'secondary'}
+              onClick={() => setCreating(creating === 'MCQ' ? null : 'MCQ')}
+            >
+              New question
+            </Button>
+            <Button
+              variant={creating === 'CODING' ? 'primary' : 'secondary'}
+              onClick={() => setCreating(creating === 'CODING' ? null : 'CODING')}
+            >
+              New problem
+            </Button>
+            <Button
+              variant={creating === 'DEBUGGING' ? 'primary' : 'secondary'}
+              onClick={() => setCreating(creating === 'DEBUGGING' ? null : 'DEBUGGING')}
+            >
+              New bug hunt
+            </Button>
+          </>
+        }
+      />
 
       {creating && (
-        <section className="panel hairline mb-6 p-6">
+        <section className="panel hairline mb-6 p-4 sm:p-6">
           <h2 className="mb-4 text-lg">{FORM_TITLES[creating]}</h2>
           {creating === 'MCQ' ? (
             <McqForm onDone={done} />
@@ -799,7 +798,7 @@ function ChallengesContent() {
             ))}
           </ul>
           {data?.length === 0 && (
-            <p className="p-8 text-center text-[14px] text-ink-dim">
+            <p className="p-5 sm:p-8 text-center text-[14px] text-ink-dim">
               No challenges yet. Create one above.
             </p>
           )}

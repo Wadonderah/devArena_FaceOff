@@ -15,3 +15,6 @@ jobs:
       - run: pnpm --filter api exec prisma generate
       - run: pnpm lint
       - run: pnpm typecheck
+      # Tests were never run in CI, so a broken one could merge unnoticed. The
+      # root script covers both apps/api and apps/web.
+      - run: pnpm test

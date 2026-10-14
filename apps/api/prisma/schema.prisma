@@ -8,10 +8,6 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-/// Three roles, strictly ordered. SUPER_ADMIN can do everything an ORGANIZER can
-/// plus platform administration (people, roles, audit, system health); ORGANIZER
-/// runs competitions; PARTICIPANT competes. Precedence is declared once in
-/// ROLE_RANK (auth/guards/roles.guard.ts) rather than re-derived per call site.
 enum Role {
   PARTICIPANT
   ORGANIZER
@@ -36,18 +32,13 @@ enum RoundState {
   ARCHIVED
 }
 
-/// When a participant learns whether their MCQ answer was correct.
-/// IMMEDIATE trades some competition integrity for learning value; pair it with
-/// per-participant option shuffling so a revealed answer does not transfer
-/// between participants by option label.
 enum RevealMode {
   IMMEDIATE
   ON_ROUND_END
   NEVER
 }
 
-/// How a round attributes score. INDIVIDUAL is the default so every existing
-/// round keeps its current behaviour.
+
 enum ParticipationMode {
   INDIVIDUAL
   TEAM
@@ -94,9 +85,6 @@ enum Category {
   PERFORMANCE
 }
 
-/// Curated rather than every language Judge0 offers. Each id in LANGUAGE_IDS
-/// (execution/judge0.status.ts) is verified against the deployed instance —
-/// an unverified id fails only when a participant submits, mid-round.
 enum Language {
   PYTHON
   JAVASCRIPT
@@ -139,12 +127,49 @@ enum ScoreSource {
 enum VerificationTokenType {
   EMAIL_VERIFICATION
   PASSWORD_RESET
+
+  /// A one-time code handed to the browser after a Google sign-in, because both
+  /// auth cookies are SameSite=Strict and so cannot be set on the response to
+  /// Google's cross-site redirect. Exchanged same-site for the real cookies.
+  OAUTH_EXCHANGE
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+
+  /// A competition opened for registration.
+  /// The one notification that cannot be scoped to a competition's
+  /// participants, because at the moment it is sent there are none — telling
+  /// people they may now sign up is the entire point.
+  COMPETITION_OPEN
+
+  TEAM_JOINED
+  ROUND_STARTED
+  ROUND_ENDED
+  GRADING_ALERT
+  TEAM_JOIN_REQUEST
+  TEAM_REQUEST_APPROVED
+  TEAM_REQUEST_DECLINED
+}
+
+enum OAuthProvider {
+  GOOGLE
+}
+
+enum TeamJoinRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  WITHDRAWN
 }
 
 model User {
-  id            String  @id @default(uuid()) @db.Uuid
-  email         String  @unique
-  passwordHash  String
+  id    String @id @default(uuid()) @db.Uuid
+  email String @unique
+
+
+  passwordHash String?
+
   role          Role    @default(PARTICIPANT)
   emailVerified Boolean @default(false)
   isActive      Boolean @default(true)
@@ -156,16 +181,20 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile            Profile?
-  refreshTokens      RefreshToken[]
-  verificationTokens VerificationToken[]
-  teamMemberships    TeamMember[]
-  captainOf          Team[]                   @relation("TeamCaptain")
-  participations     CompetitionParticipant[]
-  submissions        Submission[]
-  mcqAttempts        MCQAttempt[]
-  scoreEvents        ScoreEvent[]
-  auditLogs          AuditLog[]
+  profile              Profile?
+  refreshTokens        RefreshToken[]
+  verificationTokens   VerificationToken[]
+  teamMemberships      TeamMember[]
+  captainOf            Team[]                   @relation("TeamCaptain")
+  participations       CompetitionParticipant[]
+  submissions          Submission[]
+  mcqAttempts          MCQAttempt[]
+  scoreEvents          ScoreEvent[]
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  oauthAccounts        OAuthAccount[]
+  teamJoinRequests     TeamJoinRequest[]        @relation("TeamJoinRequester")
+  joinRequestsAnswered TeamJoinRequest[]        @relation("TeamJoinRequestResponder")
 
   @@index([role])
   @@map("users")
@@ -287,10 +316,11 @@ model Team {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  competition Competition  @relation(fields: [competitionId], references: [id], onDelete: Cascade)
-  captain     User         @relation("TeamCaptain", fields: [captainId], references: [id])
-  members     TeamMember[]
-  scoreEvents ScoreEvent[]
+  competition  Competition       @relation(fields: [competitionId], references: [id], onDelete: Cascade)
+  captain      User              @relation("TeamCaptain", fields: [captainId], references: [id])
+  members      TeamMember[]
+  scoreEvents  ScoreEvent[]
+  joinRequests TeamJoinRequest[]
 
   @@unique([competitionId, name])
   @@index([competitionId])
@@ -681,4 +711,108 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([entityType, entityId])
   @@map("audit_logs")
+}
+
+/// One delivered notification, per recipient. Fanned out at write time so each
+/// recipient can mark their own copy read — an events table plus a read cursor
+/// cannot express "read the third one but not the second".
+model Notification {
+  id     String           @id @default(uuid()) @db.Uuid
+  userId String           @db.Uuid
+  type   NotificationType
+
+  /// Rendered verbatim, and written by the server from server-side state —
+  /// never echoed from a request body into another participant's bell.
+  title String
+  body  String
+
+  /// App-relative path. The frontend refuses anything else, so a stored
+  /// absolute URL cannot turn the bell into an open redirect.
+  linkUrl String?
+
+  /// Type-specific extras. Never load-bearing — a row must render from `title`,
+  /// `body` and `linkUrl` alone.
+  metadata Json?
+
+  /// Null until read. Nullable rather than a boolean so "when" is recoverable.
+  readAt DateTime?
+
+  /// Idempotency key for fan-out, null for anything that may legitimately
+  /// repeat. A paused round transitions to LIVE twice and a corrected one
+  /// recloses, and without this each sends a duplicate. Paired with
+  /// `createMany({ skipDuplicates: true })`; Postgres treats NULLs as distinct,
+  /// so keyless announcements are never collapsed.
+  dedupeKey String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  /// The unread badge: `userId = ? AND readAt IS NULL`.
+  @@index([userId, readAt])
+  /// The list, newest first. The index above cannot serve it — `readAt` sits
+  /// between the two columns the sort needs.
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+/// A provider identity linked to an account. Its own table so an account can
+/// hold several providers later, and so the uniques below can be expressed.
+model OAuthAccount {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+
+  provider OAuthProvider
+
+  /// Google's `sub`: stable and never reused. The link is keyed on this, not
+  /// the email, because an address can change hands.
+  providerAccountId String
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Stops two accounts claiming the same provider identity.
+  @@unique([provider, providerAccountId])
+  /// One identity per provider per account.
+  @@unique([userId, provider])
+  @@map("oauth_accounts")
+}
+
+/// A request to join a team, answered by its captain.
+///
+/// Replaces handing the join code around: the code still works, but it is a
+/// bearer credential, so a team that wants to control who joins had no way to
+/// without one.
+model TeamJoinRequest {
+  id     String @id @default(uuid()) @db.Uuid
+  teamId String @db.Uuid
+  userId String @db.Uuid
+
+  /// Denormalised from the team so a participant's pending requests across one
+  /// competition can be found without joining through teams.
+  competitionId String @db.Uuid
+
+  status TeamJoinRequestStatus @default(PENDING)
+
+  message String?
+
+  createdAt     DateTime  @default(now())
+  respondedAt   DateTime?
+  respondedById String?   @db.Uuid
+
+  team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user        User  @relation("TeamJoinRequester", fields: [userId], references: [id], onDelete: Cascade)
+  respondedBy User? @relation("TeamJoinRequestResponder", fields: [respondedById], references: [id], onDelete: SetNull)
+
+  /// One standing request per person per team, rather than a partial unique on
+  /// PENDING only: Prisma cannot express a partial index, and adding one by
+  /// hand would show as permanent drift. Re-asking after a decline updates this
+  /// row back to PENDING instead of inserting a second one, so the table holds
+  /// current state and the audit log holds the history.
+  @@unique([teamId, userId])
+  @@index([teamId, status])
+  @@index([competitionId, userId, status])
+  @@map("team_join_requests")
 }

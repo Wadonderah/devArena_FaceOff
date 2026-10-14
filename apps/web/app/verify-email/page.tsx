@@ -53,7 +53,7 @@ function VerifyEmailInner() {
           <p className="mt-2.5 text-[15px] text-ink-dim">{state.message}</p>
           <Link
             href="/login"
-            className="mt-6 inline-flex h-10 items-center rounded-[10px] bg-brand px-4 text-sm font-medium text-white"
+            className="mt-6 inline-flex h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-white"
           >
             Sign in
           </Link>
@@ -71,7 +71,7 @@ function VerifyEmailInner() {
           </p>
           <Link
             href="/login"
-            className="mt-6 inline-flex h-10 items-center rounded-[10px] border border-line bg-surface-3 px-4 text-sm"
+            className="mt-6 inline-flex h-10 items-center rounded-lg border border-line bg-surface-3 px-4 text-sm"
           >
             Back to sign in
           </Link>
@@ -84,7 +84,7 @@ function VerifyEmailInner() {
 export default function VerifyEmailPage() {
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5">
-      <Suspense fallback={<Skeleton className="h-52 w-full rounded-[14px]" />}>
+      <Suspense fallback={<Skeleton className="h-52 w-full rounded-xl" />}>
         <VerifyEmailInner />
       </Suspense>
     </main>

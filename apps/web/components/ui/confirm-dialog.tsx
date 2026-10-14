@@ -96,7 +96,7 @@ export function ConfirmDialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-md rounded-[14px] border border-line bg-surface-1 p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]"
+            className="relative w-full max-w-md rounded-xl border border-line bg-surface-1 p-4 sm:p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]"
           >
             <h2 id="confirm-title" className="font-display text-xl tracking-[-0.02em]">
               {title}

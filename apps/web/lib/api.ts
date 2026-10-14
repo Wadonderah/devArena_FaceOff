@@ -14,6 +14,8 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly details?: string[],
+    /// Seconds, from the response's Retry-After header. Present on 429s.
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -24,6 +26,37 @@ export class ApiError extends Error {
   get displayMessage(): string {
     return this.details?.[0] ?? this.message;
   }
+}
+
+/// Turn a thrown error into something worth showing a participant.
+///
+/// The rate limiter is the reason this exists. Nest's ThrottlerException carries
+/// the message "ThrottlerException: Too Many Requests", which reached the UI
+/// verbatim and read as a crash rather than as "wait a moment". The API's
+/// exception filter already tags these `RATE_LIMITED`, so the code is a reliable
+/// signal and the provider's wording never has to be trusted.
+export function describeError(
+  error: unknown,
+  fallbackTitle = 'Something went wrong',
+): { title: string; detail: string; rateLimited: boolean; retryAfterSeconds?: number } {
+  if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
+    const wait = error.retryAfterSeconds;
+    return {
+      title: 'Going a bit fast',
+      detail: wait
+        ? `Try again in ${wait} second${wait === 1 ? '' : 's'}.`
+        : 'Give it a few seconds, then try again.',
+      rateLimited: true,
+      retryAfterSeconds: wait,
+    };
+  }
+
+  return {
+    title: fallbackTitle,
+    detail:
+      error instanceof ApiError ? error.displayMessage : 'Check your connection and try again.',
+    rateLimited: false,
+  };
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
@@ -53,6 +86,19 @@ async function refreshSession(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/// Routes that must never trigger a refresh-and-retry on 401.
+///
+/// This replaced a blanket `!path.startsWith('/auth/')`, which was too broad by
+/// exactly one route: `/auth/me` is the call that decides whether you are signed
+/// in, and excluding it meant an expired access cookie signed you out even
+/// though a perfectly good refresh cookie was sitting in the browser. Nothing
+/// retried, so the Network tab showed no refresh attempt at all.
+///
+/// What genuinely belongs here is only what would recurse or is meaningless to
+/// retry: refreshing the refresh call, and the three routes whose 401 is the
+/// answer rather than an error.
+const NO_REFRESH_RETRY = new Set(['/auth/refresh', '/auth/login', '/auth/register', '/auth/logout']);
+
 interface RequestOptions {
   method?: string;
   body?: unknown;
@@ -71,7 +117,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     signal,
   });
 
-  if (res.status === 401 && retryOnUnauthorized && !path.startsWith('/auth/')) {
+  if (res.status === 401 && retryOnUnauthorized && !NO_REFRESH_RETRY.has(path.split('?')[0])) {
     if (await refreshSession()) {
       return api<T>(path, { ...options, retryOnUnauthorized: false });
     }
@@ -79,11 +125,17 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
   if (!res.ok) {
     const problem = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    // Retry-After is the server telling us exactly how long to wait. Guessing
+    // instead would either nag the API or make the participant wait longer than
+    // they need to.
+    const retryAfter = Number(res.headers.get('Retry-After'));
+
     throw new ApiError(
       res.status,
       problem?.code ?? 'ERROR',
       problem?.message ?? res.statusText,
       problem?.details,
+      Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
     );
   }
 

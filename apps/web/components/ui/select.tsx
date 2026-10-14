@@ -30,7 +30,7 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
         className={cn(
-          'w-full h-11 px-3 rounded-[10px] bg-surface-1 text-ink',
+          'w-full h-11 px-3 rounded-lg bg-surface-1 text-ink',
           'border transition-colors duration-150',
           error ? 'border-danger/70' : 'border-line hover:border-line-bright',
           'focus:border-brand focus:outline-none',

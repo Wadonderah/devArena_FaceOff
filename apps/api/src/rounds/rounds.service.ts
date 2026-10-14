@@ -3,12 +3,16 @@ import {
     ConflictException,
     ForbiddenException,
     Injectable,
+    Logger,
     NotFoundException,
 } from '@nestjs/common'
 import { ChallengeType, Prisma, RoundState, RoundType } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
+import { NotificationsService } from '../notifications/notifications.service'
+import { roundEnded, roundStarted } from '../notifications/notification-templates'
 import { seededShuffle } from '../common/shuffle'
-import { canTransition } from './round-state'
+import { canTransition, scoresAreLocked } from './round-state'
+import { weightedContribution } from '../scoring/scoring'
 import type { CreateRoundDto, SetRoundChallengesDto, UpdateRoundDto } from './dto/round.dto'
 
 const CHALLENGE_TYPE_FOR: Record<RoundType, ChallengeType> = {
@@ -19,7 +23,12 @@ const CHALLENGE_TYPE_FOR: Record<RoundType, ChallengeType> = {
 
 @Injectable()
 export class RoundsService {
-    constructor(private readonly prisma: PrismaService) {}
+    private readonly logger = new Logger(RoundsService.name)
+
+    constructor(
+        private readonly prisma: PrismaService,
+        private readonly notifications: NotificationsService
+    ) {}
 
     async create(competitionId: string, dto: CreateRoundDto) {
         const competition = await this.prisma.competition.findUnique({
@@ -108,14 +117,170 @@ export class RoundsService {
 
         const now = new Date()
 
-        return this.prisma.round.update({
+        const updated = await this.prisma.round.update({
             where: { id: roundId },
             data: {
                 state: to,
                 startsAt: to === RoundState.LIVE && !round.startsAt ? now : undefined,
-                endsAt: to === RoundState.COMPLETED ? now : undefined,
+                // `&& !round.endsAt` matters for the FINALIZED -> COMPLETED
+                // unlock: without it, unlocking a round to correct its scores
+                // would stamp a fresh end time over the moment it actually
+                // ended, and the recorded timeline would be a lie.
+                endsAt: to === RoundState.COMPLETED && !round.endsAt ? now : undefined,
             },
         })
+
+        // After the write, and never in a way that can fail it. An organizer
+        // pressing Start must not see an error because a fan-out query timed
+        // out — `notifyCompetition` swallows and logs, which is the same
+        // contract AuditService.record has had all along.
+        //
+        // Only these two transitions are announced. PAUSED is not an ending
+        // (the round is coming back), and FINALIZED and ARCHIVED are
+        // bookkeeping that happen after the participant has already been told
+        // the round closed. Resuming a paused round transitions to LIVE a
+        // second time, which `dedupeKey` absorbs.
+        if (to === RoundState.LIVE || to === RoundState.COMPLETED) {
+            await this.announceTransition(round, to)
+        }
+
+        return updated
+    }
+
+    /// Best effort, including the lookup.
+    ///
+    /// `notifyCompetition` already swallows its own failures, but the query for
+    /// the competition name happens here, outside it — and an organizer
+    /// pressing Start should not get a 500 because the notification's *inputs*
+    /// could not be read either. The whole hook is the boundary, not just the
+    /// insert.
+    private async announceTransition(
+        round: { id: string; name: string; type: RoundType; competitionId: string },
+        // `typeof`, because Prisma generates RoundState as a const object: the
+        // members are values, not types.
+        to: (typeof RoundState)['LIVE'] | (typeof RoundState)['COMPLETED']
+    ): Promise<void> {
+        try {
+            const competition = await this.prisma.competition.findUnique({
+                where: { id: round.competitionId },
+                select: { name: true },
+            })
+
+            // The round's own competition is missing, which a foreign key
+            // should make impossible. Say nothing rather than send a
+            // notification naming an empty competition.
+            if (!competition) return
+
+            const template =
+                to === RoundState.LIVE
+                    ? roundStarted(round, competition.name)
+                    : roundEnded(round, competition.name)
+
+            await this.notifications.notifyCompetition(round.competitionId, template)
+        } catch (error) {
+            this.logger.error(
+                `Round ${round.id} moved to ${to} but participants were not notified: ${
+                    (error as Error).message
+                }`
+            )
+        }
+    }
+
+    /// Change a round's weight, recomputing every score already recorded for it.
+    ///
+    /// Weight is scoring policy rather than round content, so it is editable
+    /// past the DRAFT/SCHEDULED window that `update()` enforces: an organizer
+    /// who has spent the whole 1.0 budget on two rounds otherwise cannot add a
+    /// third, and cannot free up room either.
+    ///
+    /// The recompute is the entire point. `ScoreEvent` stores `roundWeight` and
+    /// a precomputed `weightedScore`, and the leaderboard SUMs `weightedScore`
+    /// directly, so simply updating the round would leave contributions already
+    /// recorded at the old weight while later ones used the new one — standings
+    /// quietly wrong, with nothing raising an error. Both happen in one
+    /// transaction so a failure cannot leave the two disagreeing.
+    ///
+    /// Exact arithmetic, not re-judging: `rawScore` and `maxRawScore` are both
+    /// already on each row, so no submission is re-run and no result changes.
+    async setWeight(roundId: string, weight: number) {
+        const round = await this.requireRound(roundId)
+
+        // FINALIZED and ARCHIVED are what "certified" means here. Reweighting
+        // them would change a published result after the fact.
+        if (scoresAreLocked(round.state)) {
+            throw new ConflictException(
+                `Scores for a ${round.state} round are locked and its weight cannot change. Unlock it first.`
+            )
+        }
+
+        await this.assertWeightBudget(round.competitionId, roundId, weight)
+
+        // The denominator is the ROUND's total available points, not the
+        // challenge's own.
+        //
+        // This is the whole reason weighted scores are additive: dividing by the
+        // round total means summing every event in a round yields exactly
+        // (roundRaw / roundMax) x weight, so a round can never contribute more
+        // than its weight. An earlier version of this method reused each row's
+        // `maxRawScore` — which is the CHALLENGE's maximum — and inflated every
+        // score by (roundMax / challengeMax). With two 20-point challenges in a
+        // 0.4-weight round, each event scored 0.4 and the round contributed 0.8.
+        const links = await this.prisma.roundChallenge.findMany({
+            where: { roundId },
+            select: { challenge: { select: { points: true } } },
+        })
+        const roundMaxPoints = links.reduce((sum, l) => sum + l.challenge.points, 0)
+
+        return this.prisma.$transaction(async (tx) => {
+            const events = await tx.scoreEvent.findMany({
+                where: { roundId },
+                select: { id: true, rawScore: true },
+            })
+
+            for (const event of events) {
+                await tx.scoreEvent.update({
+                    where: { id: event.id },
+                    data: {
+                        roundWeight: new Prisma.Decimal(weight),
+                        weightedScore: new Prisma.Decimal(
+                            weightedContribution(
+                                event.rawScore.toNumber(),
+                                roundMaxPoints,
+                                weight
+                            )
+                        ),
+                    },
+                })
+            }
+
+            return tx.round.update({
+                where: { id: roundId },
+                data: { weight: new Prisma.Decimal(weight) },
+            })
+        })
+    }
+
+    /// Permanently remove a round, and only before it has ever opened.
+    ///
+    /// DRAFT and SCHEDULED are the two states that cannot have accepted a
+    /// submission, so deleting one destroys nothing a participant produced.
+    /// From LIVE onward the round may own submissions, MCQ attempts and score
+    /// events — all of which cascade — so archiving is the only way to retire
+    /// it. Enforced here rather than in the UI: a hidden button is not a check.
+    async remove(roundId: string) {
+        const round = await this.prisma.round.findUnique({
+            where: { id: roundId },
+            select: { id: true, state: true },
+        })
+        if (!round) throw new NotFoundException('Round not found')
+
+        if (round.state !== RoundState.DRAFT && round.state !== RoundState.SCHEDULED) {
+            throw new ConflictException(
+                `A round in ${round.state} cannot be deleted. Archive it instead to keep its results.`
+            )
+        }
+
+        await this.prisma.round.delete({ where: { id: roundId } })
     }
 
     async setChallenges(roundId: string, dto: SetRoundChallengesDto) {
@@ -331,8 +496,16 @@ export class RoundsService {
         const total = siblings.reduce((sum, r) => sum + r.weight.toNumber(), weight)
 
         if (total > 1.0001) {
+            const used = total - weight
+            const remaining = Math.max(0, 1 - used)
+            // Leads with what is actionable. The previous wording opened with
+            // the rejected total, which reads like a ceiling and was taken for
+            // one: "would total 1.5000" was reported back as "the max is 1.5".
             throw new BadRequestException(
-                `Round weights would total ${total.toFixed(4)}; they cannot exceed 1`
+                `Weights must total 1.0 across a competition's rounds. ` +
+                    `The others already use ${used.toFixed(4)}, leaving ${remaining.toFixed(4)} — ` +
+                    `this round's ${weight} would take the total to ${total.toFixed(4)}. ` +
+                    `Lower an existing round's weight to make room.`
             )
         }
     }

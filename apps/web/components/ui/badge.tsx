@@ -1,40 +1,51 @@
 import { cn } from '@/lib/cn';
 import type { RoundState, CompetitionState } from '@/lib/types';
 
-type Tone = 'neutral' | 'live' | 'success' | 'warn' | 'danger' | 'brand';
+/// Exported so the state menu cannot drift from these.
+export type Tone = 'neutral' | 'live' | 'success' | 'warn' | 'danger' | 'brand';
 
 const TONES: Record<Tone, string> = {
-  neutral: 'bg-surface-3 text-ink-dim border-line',
-  live: 'bg-live/15 text-live border-live/40',
-  success: 'bg-success/15 text-success border-success/40',
-  warn: 'bg-warn/15 text-warn border-warn/40',
-  danger: 'bg-danger/15 text-danger border-danger/40',
-  brand: 'bg-brand/15 text-brand-bright border-brand/40',
+  neutral: 'border-line bg-surface-2 text-ink-dim',
+  live: 'border-live/35 bg-live/10 text-live',
+  success: 'border-success/35 bg-success/10 text-success',
+  warn: 'border-warn/35 bg-warn/10 text-warn',
+  danger: 'border-danger/35 bg-danger/10 text-danger',
+  brand: 'border-brand/35 bg-brand/10 text-brand-bright',
 };
 
+/// A small status or label chip. Children are rendered as written — there is no
+/// `uppercase` here, so callers pass sentence case.
 export function Badge({
   tone = 'neutral',
   pulse,
+  dot,
   children,
   className,
 }: {
   tone?: Tone;
+  /// A live state. Implies `dot`, and animates it.
   pulse?: boolean;
+  /// For a status, not a plain label: a dot implies one of several states.
+  dot?: boolean;
   children: React.ReactNode;
   className?: string;
 }) {
+  const showDot = dot || pulse;
+
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5',
-        'text-[11px] font-medium uppercase tracking-[0.08em]',
+        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5',
+        'text-[11.5px] font-medium leading-[1.5]',
         TONES[tone],
         className,
       )}
     >
-      {pulse && (
-        <span aria-hidden className="relative flex size-1.5">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-current opacity-70" />
+      {showDot && (
+        <span aria-hidden className="relative flex size-1.5 shrink-0">
+          {pulse && (
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-current opacity-70" />
+          )}
           <span className="relative inline-flex size-1.5 rounded-full bg-current" />
         </span>
       )}
@@ -55,18 +66,23 @@ const ROUND_TONES: Record<RoundState, Tone> = {
   ARCHIVED: 'neutral',
 };
 
-// A paused round resumes and a finalized one is locked; both read as "over" if
-// left to the default lowercase enum name, which is the wrong idea in each case.
-const ROUND_LABELS: Partial<Record<RoundState, string>> = {
-  LIVE: 'Live now',
+/// Written out rather than derived from the enum, so each can be the right
+/// word: a paused round resumes and a finalized one is locked, and both read as
+/// "over" if left as the member name.
+const ROUND_LABELS: Record<RoundState, string> = {
+  DRAFT: 'Draft',
+  SCHEDULED: 'Scheduled',
+  LIVE: 'Live',
   PAUSED: 'Paused',
-  FINALIZED: 'Scores final',
+  COMPLETED: 'Completed',
+  FINALIZED: 'Final',
+  ARCHIVED: 'Archived',
 };
 
 export function RoundStateBadge({ state }: { state: RoundState }) {
   return (
-    <Badge tone={ROUND_TONES[state]} pulse={state === 'LIVE'}>
-      {ROUND_LABELS[state] ?? state.toLowerCase()}
+    <Badge tone={ROUND_TONES[state]} dot pulse={state === 'LIVE'}>
+      {ROUND_LABELS[state]}
     </Badge>
   );
 }
@@ -79,10 +95,19 @@ const COMPETITION_TONES: Record<CompetitionState, Tone> = {
   ARCHIVED: 'neutral',
 };
 
+const COMPETITION_LABELS: Record<CompetitionState, string> = {
+  DRAFT: 'Draft',
+  // Not "Open" — beside a Join button that would read as "already running".
+  REGISTRATION: 'Registration open',
+  LIVE: 'Live',
+  COMPLETED: 'Completed',
+  ARCHIVED: 'Archived',
+};
+
 export function CompetitionStateBadge({ state }: { state: CompetitionState }) {
   return (
-    <Badge tone={COMPETITION_TONES[state]} pulse={state === 'LIVE'}>
-      {state === 'REGISTRATION' ? 'Registration open' : state.toLowerCase()}
+    <Badge tone={COMPETITION_TONES[state]} dot pulse={state === 'LIVE'}>
+      {COMPETITION_LABELS[state]}
     </Badge>
   );
 }

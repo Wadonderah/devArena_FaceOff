@@ -159,17 +159,54 @@ export class TokenService {
       throw new UnauthorizedException('Account is disabled');
     }
 
-    const replacement = await this.issue(stored.user, stored.familyId);
+    // Rotation is a compare-and-swap, not a read-then-write.
+    //
+    // The checks above ran against a row read earlier. Two refreshes arriving
+    // together — which is the normal case with several tabs open — could both
+    // pass them, both mint a child, and both stamp the parent, leaving two live
+    // tokens in one family and last-write-wins on the parent row. The
+    // `revokedAt: null` in the WHERE is what makes exactly one of them succeed.
+    //
+    // The replacement's hash is generated before the claim and written by it, so
+    // the row is never momentarily revoked-with-no-successor. A replay landing
+    // in that window would otherwise fail the `stored.replacedByTokenHash` test
+    // above and be treated as theft, destroying a legitimate session.
+    const refreshToken = randomBytes(48).toString('base64url');
+    const replacementHash = TokenService.hash(refreshToken);
+    const expiresAt = new Date(
+      Date.now() + this.config.get('REFRESH_TOKEN_TTL_DAYS') * 24 * 60 * 60 * 1000,
+    );
 
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: {
-        revokedAt: new Date(),
-        replacedByTokenHash: TokenService.hash(replacement.refreshToken),
-      },
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.refreshToken.updateMany({
+        where: { id: stored.id, revokedAt: null },
+        data: { revokedAt: new Date(), replacedByTokenHash: replacementHash },
+      });
+
+      if (count === 0) return false;
+
+      await tx.refreshToken.create({
+        data: {
+          userId: stored.user.id,
+          tokenHash: replacementHash,
+          familyId: stored.familyId,
+          expiresAt,
+        },
+      });
+
+      return true;
     });
 
-    return replacement;
+    if (!claimed) {
+      // Another request rotated this token between our read and our write. That
+      // is a race, not theft, and by definition it happened milliseconds ago, so
+      // it gets the same answer as a grace-window replay: a fresh access token
+      // and no refresh cookie, because the winner already set one.
+      this.logger.debug(`Lost a concurrent refresh rotation for user ${stored.userId}`);
+      return { accessToken: await this.signAccess(stored.user), refreshToken: null };
+    }
+
+    return { accessToken: await this.signAccess(stored.user), refreshToken };
   }
 
   async revoke(presentedToken: string): Promise<void> {

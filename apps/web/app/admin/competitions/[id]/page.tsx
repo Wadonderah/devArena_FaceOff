@@ -9,12 +9,19 @@ import { Button } from '@/components/ui/button';
 import { Badge, CompetitionStateBadge, RoundStateBadge } from '@/components/ui/badge';
 import { Field } from '@/components/ui/input';
 import { SelectField } from '@/components/ui/select';
+import { StateMenu, type StateOption } from '@/components/ui/state-menu';
 import { TextAreaField } from '@/components/ui/textarea';
 import { SkeletonRows } from '@/components/ui/skeleton';
-import { api, ApiError } from '@/lib/api';
-import type { ChallengeType, Competition, RoundSummary, RoundType } from '@/lib/types';
+import { api, ApiError, describeError } from '@/lib/api';
+import type {
+  ChallengeType,
+  Competition,
+  CompetitionState,
+  RoundSummary,
+  RoundType,
+} from '@/lib/types';
 import { cn } from '@/lib/cn';
-import { ALL_LANGUAGES, LANGUAGE_LABELS } from '@/lib/taxonomy';
+import { ALL_LANGUAGES, LANGUAGE_LABELS, ROUND_TYPE_NAME } from '@/lib/taxonomy';
 import { ROUND_ACTIONS, TRANSITION_TOAST } from '@/lib/round-actions';
 import {
   RoundScoringFields,
@@ -22,6 +29,8 @@ import {
   type RoundScoringValues,
 } from '@/components/round-scoring-fields';
 import { useToast } from '@/components/ui/toast';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { CompetitionSettings } from '@/components/competition-settings';
 
 interface ChallengeRow {
   id: string;
@@ -55,6 +64,44 @@ const COMPETITION_TOAST: Record<string, string> = {
   COMPLETED: 'Competition completed',
   ARCHIVED: 'Competition archived',
 };
+
+/// What each state does, shown in the menu before it is chosen.
+///
+/// These were discoverable only by pressing. The REGISTRATION line matters
+/// most: it now notifies every account on the platform, which is not something
+/// an organizer should find out afterwards.
+const COMPETITION_STATES: StateOption<CompetitionState>[] = [
+  {
+    value: 'DRAFT',
+    label: 'Draft',
+    hint: 'Hidden from participants. Nobody can see or join it.',
+    tone: 'neutral',
+  },
+  {
+    value: 'REGISTRATION',
+    label: 'Registration open',
+    hint: 'Anyone can join. Notifies every account once.',
+    tone: 'brand',
+  },
+  {
+    value: 'LIVE',
+    label: 'Live',
+    hint: 'Rounds can run and record scores. Teams lock.',
+    tone: 'live',
+  },
+  {
+    value: 'COMPLETED',
+    label: 'Completed',
+    hint: 'Closes the competition. Standings stay readable.',
+    tone: 'success',
+  },
+  {
+    value: 'ARCHIVED',
+    label: 'Archived',
+    hint: 'Retired and moved out of the main list.',
+    tone: 'neutral',
+  },
+];
 
 const CHALLENGE_NOUN: Record<RoundType, string> = {
   MCQ: 'questions',
@@ -557,6 +604,13 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
   // Tracked so only the pressed button spins — a shared `isPending` lights up
   // every action in the row.
   const [pending, setPending] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [weighting, setWeighting] = useState(false);
+  const [weight, setWeight] = useState(String(round.weight ?? ''));
+
+  // DRAFT and SCHEDULED are both the states a round can still be edited in and
+  // the only ones it can be deleted in — neither has accepted a submission.
+  // The server enforces the same rule; this only avoids offering a 409.
   const editable = round.state === 'DRAFT' || round.state === 'SCHEDULED';
 
   const transition = useMutation({
@@ -573,6 +627,41 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
     onSettled: () => setPending(null),
   });
 
+  // Weight is scoring policy rather than content, so it stays editable after a
+  // round goes live. Only finalizing (or archiving) locks it, because that is
+  // the point at which a result is published as certified.
+  const scoresLocked = round.state === 'FINALIZED' || round.state === 'ARCHIVED';
+
+  const setRoundWeight = useMutation({
+    mutationFn: () =>
+      api(`/rounds/${round.id}/weight`, {
+        method: 'PATCH',
+        body: { weight: Number(weight) },
+      }),
+    onSuccess: () => {
+      toast.success('Weight updated', 'Scores already recorded for this round were recalculated.');
+      setWeighting(false);
+      onChanged();
+    },
+    onError: (error) => {
+      const { title, detail } = describeError(error, 'Could not change the weight');
+      toast.error(title, detail);
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api<void>(`/rounds/${round.id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast.success('Round deleted', round.name);
+      onChanged();
+    },
+    onError: (error) => {
+      const { title, detail } = describeError(error, 'Could not delete the round');
+      toast.error(title, detail);
+      setConfirmingDelete(false);
+    },
+  });
+
   return (
     <li className="border-b border-line/60 px-4 py-3.5 last:border-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -580,7 +669,7 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-[15px]">{round.name}</span>
             <RoundStateBadge state={round.state} />
-            <Badge>{round.type}</Badge>
+            <Badge>{ROUND_TYPE_NAME[round.type] ?? round.type}</Badge>
             {round.participationMode && round.participationMode !== 'INDIVIDUAL' && (
               <Badge tone="brand">
                 {round.participationMode === 'TEAM' ? 'Team scored' : 'Team + individual'}
@@ -588,7 +677,8 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
             )}
           </div>
           <p className="mt-0.5 text-[13px] text-ink-faint">
-            {round._count.challenges} challenges · order {round.orderIndex}
+            {round._count.challenges} challenges · order {round.orderIndex} · weight{' '}
+            <span className="tabular">{Number(round.weight ?? 0).toFixed(2)}</span>
           </p>
           {transition.error && (
             <p role="alert" className="mt-1 text-[13px] text-danger">
@@ -622,7 +712,31 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
               >
                 {picking ? 'Close' : 'Challenges'}
               </Button>
+
+              {/* The shared dialog rather than a bespoke two-step, so every
+                  destructive action in the app asks the same way. */}
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={remove.isPending}
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete
+              </Button>
             </>
+          )}
+          {!scoresLocked && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setWeighting(!weighting);
+                setEditing(false);
+                setPicking(false);
+              }}
+            >
+              {weighting ? 'Close' : 'Weight'}
+            </Button>
           )}
           {actions.map((action) => (
             <Button
@@ -641,6 +755,49 @@ function RoundRow({ round, onChanged }: { round: RoundSummary; onChanged: () => 
           ))}
         </div>
       </div>
+
+      {weighting && (
+        <form
+          className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-line bg-surface-1 p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setRoundWeight.mutate();
+          }}
+        >
+          <div className="w-36">
+            <Field
+              label="Weight"
+              type="number"
+              step="0.01"
+              min={0}
+              max={1}
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+            />
+          </div>
+
+          <Button type="submit" size="sm" loading={setRoundWeight.isPending}>
+            Save weight
+          </Button>
+
+          {/* Said plainly because it is surprising: this rewrites rows that
+              already exist, rather than only affecting future submissions. */}
+          <p className="w-full text-[12px] leading-relaxed text-ink-faint">
+            Weights across a competition&apos;s rounds must total 1.00. Changing this recalculates
+            every score already recorded for this round, so the leaderboard stays consistent.
+          </p>
+        </form>
+      )}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete "${round.name}"?`}
+        description="This round has not opened, so nothing anyone submitted is lost. It cannot be undone, and its challenges will need attaching again if you recreate it."
+        confirmLabel="Delete round"
+        loading={remove.isPending}
+        onConfirm={() => remove.mutate()}
+        onCancel={() => setConfirmingDelete(false)}
+      />
 
       {editing && (
         <EditRoundForm
@@ -712,18 +869,13 @@ function ManageCompetition({ id }: { id: string }) {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <SelectField
-            label=""
-            aria-label="Competition state"
-            options={[
-              { value: 'DRAFT', label: 'Draft' },
-              { value: 'REGISTRATION', label: 'Registration open' },
-              { value: 'LIVE', label: 'Live' },
-              { value: 'COMPLETED', label: 'Completed' },
-              { value: 'ARCHIVED', label: 'Archived' },
-            ]}
+          <StateMenu
+            label="Competition state"
+            className="w-52"
             value={data.state}
-            onChange={(e) => setState.mutate(e.target.value)}
+            options={COMPETITION_STATES}
+            pending={setState.isPending}
+            onChange={(next) => setState.mutate(next)}
           />
           <Link href={`/leaderboard/${id}`}>
             <Button variant="secondary">Leaderboard</Button>
@@ -736,6 +888,10 @@ function ManageCompetition({ id }: { id: string }) {
           {setState.error instanceof ApiError ? setState.error.displayMessage : 'Could not update.'}
         </p>
       )}
+
+      <div className="mb-5">
+        <CompetitionSettings competition={data} />
+      </div>
 
       <section className="panel hairline overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
@@ -767,7 +923,7 @@ function ManageCompetition({ id }: { id: string }) {
         )}
 
         {data.rounds.length === 0 ? (
-          <p className="p-8 text-center text-[14px] text-ink-dim">
+          <p className="p-5 sm:p-8 text-center text-[14px] text-ink-dim">
             No rounds yet. Create one to get started.
           </p>
         ) : (

@@ -11,8 +11,11 @@ import { Badge, RoundStateBadge } from '@/components/ui/badge';
 import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/components/ui/toast';
-import { useCountdown, useRound, useSubmission } from '@/lib/hooks';
+import { useCountdown, useCurrentUser, useRound, useSubmission } from '@/lib/hooks';
+import { useDraft } from '@/lib/use-draft';
 import { RoundRules } from '@/components/round-rules';
+import { RoundClosed, RoundExitLinks, isRoundClosed } from '@/components/round-exit';
+import { GradingFailed } from '@/components/grading-failed';
 import { LANGUAGE_LABELS } from '@/lib/taxonomy';
 import type { Challenge, Language, RunResult } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -34,7 +37,15 @@ function Verdict({ passed, label }: { passed: boolean; label: string }) {
   );
 }
 
-function SubmissionPanel({ submissionId }: { submissionId: string }) {
+function SubmissionPanel({
+  submissionId,
+  onRetry,
+  retrying,
+}: {
+  submissionId: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
   const { data } = useSubmission(submissionId);
 
   if (!data) return <Skeleton className="h-24 w-full rounded-xl" />;
@@ -54,11 +65,7 @@ function SubmissionPanel({ submissionId }: { submissionId: string }) {
   }
 
   if (data.status === 'SYSTEM_ERROR') {
-    return (
-      <div role="alert" className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-3.5">
-        <p className="text-[14px] text-warn">{data.errorMessage}</p>
-      </div>
-    );
+    return <GradingFailed onRetry={onRetry} retrying={retrying} />;
   }
 
   const passed = data.passedTests ?? 0;
@@ -124,6 +131,7 @@ function DebuggingWorkspace({
 }) {
   const [language, setLanguage] = useState<Language>(languages[0] ?? 'PYTHON');
   const [code, setCode] = useState('');
+  const [seeded, setSeeded] = useState(false);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [runResults, setRunResults] = useState<RunResult[] | null>(null);
   const queryClient = useQueryClient();
@@ -137,12 +145,32 @@ function DebuggingWorkspace({
 
   const bug = challenge?.debuggingChallenge;
 
+  const { data: me } = useCurrentUser();
+
+  const draft = useDraft({
+    userId: me?.id,
+    challengeId,
+    language,
+    value: code,
+    ready: seeded,
+  });
+
   // Reset to the broken code when the challenge loads or the language changes.
   // Starting from a blank editor would defeat the point — the participant is
   // meant to read and repair this, not rewrite it.
+  //
+  // A saved draft takes precedence, because a half-finished repair is worth
+  // more than the untouched original the participant can already see described
+  // in the bug report.
   useEffect(() => {
-    if (bug) setCode(bug.brokenCode[language] ?? '');
-  }, [bug, language]);
+    if (!bug) return;
+
+    setSeeded(false);
+    const saved = draft.restore();
+    setCode(saved ?? bug.brokenCode[language] ?? '');
+    setSeeded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bug, language, me?.id]);
 
   const run = useMutation({
     mutationFn: () =>
@@ -166,6 +194,7 @@ function DebuggingWorkspace({
       // Grading is asynchronous, so without this the button just stops spinning
       // and nothing visibly happens until the poll returns a verdict.
       toast.success('Submitted for grading', 'Your result appears below when the judge finishes.');
+      draft.clear();
       setSubmissionId(data.id);
       setRunResults(null);
       queryClient.invalidateQueries({ queryKey: ['my-submissions', roundId] });
@@ -177,7 +206,7 @@ function DebuggingWorkspace({
       ),
   });
 
-  if (isLoading) return <Skeleton className="h-96 w-full rounded-[14px]" />;
+  if (isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (!bug) return null;
 
   const busy = run.isPending || submit.isPending;
@@ -185,9 +214,14 @@ function DebuggingWorkspace({
   const contextFiles = Object.entries(bug.contextFiles ?? {});
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <section className="max-h-[calc(100dvh-9rem)] space-y-4 overflow-y-auto lg:sticky lg:top-20">
-        <div className="panel hairline bracketed p-5">
+    <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      {/* Desktop-only scroll container, matching the coding round.
+          
+          Stacked on a phone this created a nested scroll area: flicking inside
+          moved the bug report, flicking just outside moved the page, and
+          reaching the editor meant scrolling the whole report first. */}
+      <section className="min-w-0 space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100dvh-9rem)] lg:overflow-y-auto">
+        <div className="panel hairline bracketed p-4 sm:p-5">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-live">
             Bug report
           </p>
@@ -227,7 +261,7 @@ function DebuggingWorkspace({
         )}
 
         {bug.testCases.length > 0 && (
-          <div className="panel hairline p-5">
+          <div className="panel hairline p-4 sm:p-5">
             <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
               Reproduction
             </p>
@@ -263,7 +297,7 @@ function DebuggingWorkspace({
                 aria-pressed={language === lang}
                 onClick={() => setLanguage(lang)}
                 className={cn(
-                  'rounded-[7px] px-3 py-1.5 text-[13px] transition-colors duration-150',
+                  'rounded-md px-3 py-1.5 text-[13px] transition-colors duration-150',
                   language === lang ? 'bg-surface-3 text-ink' : 'text-ink-dim hover:text-ink',
                 )}
               >
@@ -296,7 +330,16 @@ function DebuggingWorkspace({
         )}
 
         <AnimatePresence mode="wait">
-          {submissionId && <SubmissionPanel key={submissionId} submissionId={submissionId} />}
+          {submissionId && (
+            <SubmissionPanel
+              key={submissionId}
+              submissionId={submissionId}
+              // Resubmits the editor's current contents, so a participant who
+              // adjusted something after the failure retries what they can see.
+              onRetry={() => submit.mutate()}
+              retrying={submit.isPending}
+            />
+          )}
           {runResults && (
             <motion.div
               key="run"
@@ -360,7 +403,7 @@ function DebuggingRound({ roundId }: { roundId: string }) {
 
   if (error) {
     return (
-      <div className="panel p-10 text-center">
+      <div className="panel p-6 sm:p-10 text-center">
         <h1 className="text-lg">Round unavailable</h1>
         <p className="mt-2 text-[14px] text-ink-dim">{message(error, 'Please try again.')}</p>
       </div>
@@ -390,7 +433,11 @@ function DebuggingRound({ roundId }: { roundId: string }) {
         )}
       </header>
 
-      <RoundRules round={round} />
+      {isRoundClosed(round.state) ? (
+        <RoundClosed competitionId={round.competitionId} state={round.state} />
+      ) : (
+        <>
+          <RoundRules round={round} />
 
       {ids && ids.challengeIds.length > 1 && (
         <nav aria-label="Bugs" className="mb-5 flex flex-wrap gap-2">
@@ -421,6 +468,10 @@ function DebuggingRound({ roundId }: { roundId: string }) {
           languages={round.allowedLanguages.length > 0 ? round.allowedLanguages : ['PYTHON']}
         />
       )}
+        </>
+      )}
+
+      <RoundExitLinks competitionId={round.competitionId} />
     </>
   );
 }

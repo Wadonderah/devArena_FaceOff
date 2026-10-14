@@ -51,11 +51,20 @@ export function isPass(statusId: number): boolean {
 
 /// A platform fault rather than a fault in the participant's code. These must not
 /// count against the participant.
+///
+/// An unrecognised status counts as one too, and must: `toOutcome` already maps
+/// anything unknown to INTERNAL_ERROR, but this predicate listed only the two
+/// known ids. A status Judge0 added after this map was written was therefore
+/// *recorded* as a platform error while being *scored* as a failed test — the
+/// participant lost the points and nothing retried. The two functions now agree
+/// by construction: a status with no outcome of its own is a fault on our side.
 export function isPlatformFault(statusId: number): boolean {
-  return (
-    statusId === JUDGE0_STATUS.INTERNAL_ERROR ||
-    statusId === JUDGE0_STATUS.EXEC_FORMAT_ERROR
-  );
+  if (statusId === JUDGE0_STATUS.INTERNAL_ERROR) return true;
+  if (statusId === JUDGE0_STATUS.EXEC_FORMAT_ERROR) return true;
+
+  // Unknown, and not merely pending — IN_QUEUE and PROCESSING are absent from
+  // the outcome map by design and are handled by isTerminal.
+  return isTerminal(statusId) && !(statusId in OUTCOME_BY_STATUS);
 }
 
 /// Judge0 CE language ids. Verify against `GET /languages` on the deployed
