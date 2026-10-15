@@ -120,7 +120,7 @@ function Slide({
         <div
           className={cn(
             'bg-gradient-to-br',
-            isLive ? 'from-live/[0.08] via-transparent to-transparent' : 'from-brand/[0.08] via-transparent to-transparent',
+            isLive ? 'from-live/[0.05] via-transparent to-transparent' : 'from-brand/[0.04] via-transparent to-transparent',
           )}
         >
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3.5 p-4 sm:gap-y-4 sm:p-6">
@@ -203,15 +203,34 @@ export function CompetitionCarousel({
     if (index > count - 1) setIndex(0);
   }, [count, index]);
 
-  const active = competitions[Math.min(index, count - 1)];
+  // Deliberately NOT on every slide change.
+  //
+  // The panels below this carousel — the live round, the team, the standings —
+  // all key off whichever competition is announced here. Announcing the
+  // autoplay's slides meant those four panels re-pointed at a different
+  // competition every seven seconds and dropped into their loading states, so
+  // the whole page appeared to reload on a timer. Only a deliberate move says
+  // "I want to look at this one"; the timer is just showing what exists.
+  const announce = useCallback(
+    (competition: CompetitionListItem) => onActiveChange?.(competition),
+    [onActiveChange],
+  );
 
   useEffect(() => {
-    if (active) onActiveChange?.(active);
-  }, [active, onActiveChange]);
+    const first = competitions[0];
+    if (first) announce(first);
+    // Once, for the initial target. Later changes come from `go`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const go = useCallback(
-    (next: number) => setIndex(((next % count) + count) % count),
-    [count],
+    (next: number) => {
+      const target = ((next % count) + count) % count;
+      setIndex(target);
+      const competition = competitions[target];
+      if (competition) announce(competition);
+    },
+    [count, competitions, announce],
   );
 
   // Autoplay stops for reduced motion, for a single slide, and while the
@@ -275,9 +294,10 @@ export function CompetitionCarousel({
               onClick={() => go(i)}
               aria-label={`Show ${c.name}`}
               aria-current={i === index}
-              // Hit area stays 24px while the dot itself is 6px, so this is
-              // thumb-reachable without drawing a row of large circles.
-              className="group grid size-6 place-items-center"
+              // Hit area is 32px while the dot itself is 6px. 24px is the bare
+              // WCAG minimum and reads as fiddly under a thumb; the extra 8px
+              // costs nothing visually because the target is invisible.
+              className="group grid size-8 place-items-center"
             >
               <span
                 className={cn(

@@ -16,9 +16,19 @@
   --color-line: #2a3556;
   --color-line-bright: #3b4a72;
 
-  --color-ink: #f4f6fb;
-  --color-ink-dim: #c7d2e8;
-  --color-ink-faint: #94a3b8;
+  /* A measured ladder rather than three bright values.
+     
+     Each step roughly halves against the page: 16.0x / 8.5x / 5.2x. The middle
+     one is why dark mode read as shouty — `ink-dim` was at 12.9x, close enough
+     to body text that secondary copy never receded, so every description and
+     label competed with the thing it was describing. GitHub's equivalent sits
+     at 6.2x against 16.0x for body, and that gap is what makes a dark page
+     settle. Saturation is eased as the steps darken so they stay grey-blue
+     rather than turning into a blue highlight. The faintest is 5.2x, still
+     above the 4.5x needed for normal-size text. */
+  --color-ink: #e3e8f3;
+  --color-ink-dim: #9cabca;
+  --color-ink-faint: #768499;
 
   /* Akwannya Hub teal. #2d938c is the parent site's own focus-ring colour. */
   --color-brand: #2d938c;
@@ -81,6 +91,9 @@
   --radius-panel: 10px;
 
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* The landing page's product preview, when it changes screen. */
+  --animate-fade-in: fade-in 400ms var(--ease-out-expo);
 
   /* Texture is theme-dependent: light-on-dark inverts to dark-on-light, and
      grain that reads as film on navy reads as dirt on white unless softened. */
@@ -463,4 +476,15 @@
     rgb(var(--hero-scrim) / var(--hero-scrim-a2)) 54%,
     rgb(var(--hero-scrim) / 0) 88%
   );
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

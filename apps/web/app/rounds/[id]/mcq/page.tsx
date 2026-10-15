@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
-import { use, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
@@ -214,6 +214,39 @@ function McqRound({ roundId }: { roundId: string }) {
     [progress],
   );
 
+  const complete = Boolean(
+    progress && progress.totalQuestions > 0 && progress.answeredCount >= progress.totalQuestions,
+  );
+
+  const completeRef = useRef<HTMLDivElement>(null);
+  const wasComplete = useRef<boolean | null>(null);
+  const reduceMotion = useReducedMotion();
+
+  // The last question is at the bottom of a long page, and the panel saying
+  // the round is finished renders at the top of it — so the one moment that
+  // most deserves a response was the one a participant was least likely to
+  // see. Answering the last question now carries them to it.
+  useEffect(() => {
+    // Wait for real data: on the first render `progress` is undefined and
+    // `complete` is false, and treating that as "not yet finished" would scroll
+    // anyone who merely opens a round they already completed.
+    if (!progress) return;
+
+    const previous = wasComplete.current;
+    wasComplete.current = complete;
+
+    if (previous !== false || !complete) return;
+
+    completeRef.current?.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    // Focus follows the scroll so the panel is announced rather than silently
+    // arriving, and so the next Tab starts from here instead of back in the
+    // question list.
+    completeRef.current?.focus({ preventScroll: true });
+  }, [complete, progress, reduceMotion]);
+
   if (isLoading) return <SkeletonRows rows={4} />;
 
   if (error) {
@@ -282,14 +315,21 @@ function McqRound({ roundId }: { roundId: string }) {
         </div>
       )}
 
-      {progress && progress.totalQuestions > 0 &&
-        progress.answeredCount >= progress.totalQuestions && (
+      {complete && progress && (
+        // scroll-mt clears the sticky mobile header, which would otherwise crop
+        // the top of the panel we just scrolled to.
+        <div
+          ref={completeRef}
+          tabIndex={-1}
+          className="scroll-mt-16 outline-none lg:scroll-mt-6"
+        >
           <RoundComplete
             roundId={roundId}
             competitionId={round.competitionId}
             answered={progress.answeredCount}
           />
-        )}
+        </div>
+      )}
 
       {progress && (
         <div className="mb-6 h-1.5 overflow-hidden rounded-full bg-surface-2">

@@ -6,9 +6,12 @@ import { Shell } from '@/components/shell';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { TeamCard } from '@/components/team-card';
 import { VerifyBanner } from '@/components/verify-banner';
-import { ProfileHeader } from '@/components/profile-header';
 import { CompetitionRow } from '@/components/competition-card';
 import { CompetitionCarousel } from '@/components/competition-carousel';
+import { RoundSchedule } from '@/components/round-schedule';
+import { StandingCard } from '@/components/standing-card';
+import { LiveNow } from '@/components/live-now';
+import { ActivityFeed } from '@/components/activity-feed';
 import { FaceOffRule } from '@/components/brand-mark';
 import { Section } from '@/components/ui/section';
 import { useCompetitions } from '@/lib/hooks';
@@ -50,10 +53,26 @@ function DashboardContent() {
     <>
       <VerifyBanner />
 
-      {/* Identity, then straight into the competition. The strip is deliberately
-          small: it answers "am I signed in as the right person", which is a
-          glance, not a headline. */}
-      <ProfileHeader className="mb-5" />
+      {/* No avatar and no name here. Identity belongs in the chrome — the rail
+          carries it on desktop, the top strip on mobile — and repeating it at
+          the top of the content column is both duplication and the only thing
+          on this page that is about the reader rather than the competition.
+          What a page head is actually for is orientation, so that is all this
+          does. */}
+      <header className="mb-5 flex items-baseline justify-between gap-4">
+        <h1 className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint">
+          Dashboard
+        </h1>
+        {hasAny && (
+          <p className="text-[12px] text-ink-faint">
+            {grouped.live.length > 0 && (
+              <span className="text-live">{grouped.live.length} live</span>
+            )}
+            {grouped.live.length > 0 && grouped.open.length > 0 && ' · '}
+            {grouped.open.length > 0 && `${grouped.open.length} open`}
+          </p>
+        )}
+      </header>
 
       {isLoading ? (
         <SkeletonRows rows={3} />
@@ -77,12 +96,36 @@ function DashboardContent() {
         </div>
       ) : (
         <>
-          {featured.length > 0 && (
-            <div className="space-y-4">
-              <CompetitionCarousel competitions={featured} onActiveChange={handleActive} />
-              {/* Beneath, not above. A team is a detail of the competition, and
-                  it used to sit on top of the thing it belongs to. */}
-              {teamCompetitionId && <TeamCard competitionId={teamCompetitionId} />}
+          {featured.length > 0 && teamCompetitionId && (
+            // Two columns from lg up. Collapsing the three old sections into the
+            // carousel left the page about one screen tall with a lot of air
+            // under it; the rail puts the standings and the team beside the
+            // competition instead of leaving the right half empty.
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+              {/* Wide-format panels stay in the wide column. TeamCard lays its
+                  three figures out in a row, so in a 300px rail it wrapped into
+                  a tall block — which is what made the page read as oversized
+                  boxes rather than as a denser layout. */}
+              <div className="space-y-4">
+                <CompetitionCarousel competitions={featured} onActiveChange={handleActive} />
+                {/* Directly under the competition: during an event this is the
+                    only panel anyone is actually reading. */}
+                <LiveNow competitionId={teamCompetitionId} />
+                {/* Beneath, not above. A team is a detail of the competition, and
+                    it used to sit on top of the thing it belongs to. */}
+                <TeamCard competitionId={teamCompetitionId} />
+                <RoundSchedule competitionId={teamCompetitionId} />
+              </div>
+
+              {/* Sticky so the standings stay in view while the left column
+                  scrolls — a short rail that follows reads as deliberate, where
+                  a short rail that scrolls away just leaves a hole.
+                  Below the fold on a phone, which is right: a participant on a
+                  390px screen wants the live round first, not the standings. */}
+              <aside className="space-y-4 lg:sticky lg:top-6">
+                <StandingCard competitionId={teamCompetitionId} />
+                <ActivityFeed />
+              </aside>
             </div>
           )}
 

@@ -10,6 +10,7 @@ import type {
   CompetitionListItem,
   CurrentUser,
   Leaderboard,
+  CodeSubmissionSummary,
   McqProgress,
   MyTeam,
   NotificationPage,
@@ -88,6 +89,19 @@ export function useLeaderboard(competitionId: string, intervalMs = 3000) {
     enabled: Boolean(competitionId),
     refetchInterval: intervalMs,
     refetchIntervalInBackground: false,
+  });
+}
+
+/// A participant's own code submissions in one round.
+///
+/// The coding counterpart to `useMcqProgress`: there is no answered-of-total
+/// for code, so participation is derived from which challenges have at least
+/// one SUBMIT against them.
+export function useMyCodeSubmissions(roundId: string) {
+  return useQuery({
+    queryKey: ['code-submissions', roundId],
+    queryFn: () => api<CodeSubmissionSummary[]>(`/submissions/code/rounds/${roundId}/mine`),
+    enabled: Boolean(roundId),
   });
 }
 
