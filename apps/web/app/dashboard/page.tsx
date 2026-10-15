@@ -1,147 +1,19 @@
 'use client';
 
-import Link from 'next/link';
+import { useCallback, useState } from 'react';
 import { AuthGate } from '@/components/auth-gate';
 import { Shell } from '@/components/shell';
-import { RoundStateBadge, CompetitionStateBadge } from '@/components/ui/badge';
-import { Skeleton, SkeletonRows } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import { SkeletonRows } from '@/components/ui/skeleton';
 import { TeamCard } from '@/components/team-card';
 import { VerifyBanner } from '@/components/verify-banner';
 import { ProfileHeader } from '@/components/profile-header';
-import { CompetitionCard, CompetitionRow } from '@/components/competition-card';
+import { CompetitionRow } from '@/components/competition-card';
+import { CompetitionCarousel } from '@/components/competition-carousel';
 import { FaceOffRule } from '@/components/brand-mark';
 import { Section } from '@/components/ui/section';
-import { useCompetition, useCompetitions } from '@/lib/hooks';
-import { ROUND_PATH } from '@/lib/taxonomy';
-import { ArrowRight, CalendarClock, LayoutList, Radio, Trophy } from 'lucide-react';
+import { useCompetitions } from '@/lib/hooks';
+import { Trophy } from 'lucide-react';
 import type { CompetitionListItem } from '@/lib/types';
-import { cn } from '@/lib/cn';
-
-/// The competition a participant is most likely here for, as the first thing on
-/// the page.
-///
-/// It used to be third, below a greeting set at `text-3xl` and a paragraph
-/// explaining what a competition is. Both of those are read once; this is read
-/// every day, and during an event it is the only reason anyone opens the page.
-/// The explanation now lives in the empty state, which is the only place it is
-/// ever actually needed.
-function CurrentCompetition({ competition }: { competition: CompetitionListItem }) {
-  // Two sources on purpose, and this is what fixes the load order.
-  //
-  // The sections below this panel render straight from the list query, so they
-  // appeared the instant it resolved. This panel then fired a SECOND request
-  // for `/competitions/:id` — which cannot even start until the list has
-  // arrived, because it needs the id from it — and showed a 208px grey block
-  // until that landed. So the competition that is actually live was reliably
-  // the last thing on the page to appear, a whole round trip behind a
-  // competition that has not started.
-  //
-  // Everything in the header is already in the list payload: name, state,
-  // description. Only the round strip needs the detail request, so only the
-  // round strip waits for it. The panel itself, with the right name and the
-  // right badge, is there as soon as anything is.
-  const { data } = useCompetition(competition.id);
-
-  const live = data?.rounds.find((r) => r.state === 'LIVE');
-  const next = data?.rounds.find((r) => r.state === 'SCHEDULED');
-  const focus = live ?? next;
-  const isLive = Boolean(live);
-  const loadingRounds = !data;
-
-  return (
-    <section
-      className={cn(
-        'overflow-hidden rounded-xl border bg-surface-1',
-        // A live round earns a warmer edge. Still a border, not a badge.
-        isLive ? 'border-live/25' : 'border-line',
-      )}
-    >
-      <FaceOffRule live={isLive} />
-
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3.5 p-4 sm:gap-y-4 sm:p-6">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-            {/* The page's visual anchor, and the only large type on it. */}
-            <h2 className="text-2xl leading-tight">{competition.name}</h2>
-            <CompetitionStateBadge state={competition.state} />
-          </div>
-          {/* Clamped to two lines on a phone. A three-sentence description was
-              pushing the round — the row that matters during an event — most of
-              the way off a 390px screen. The full text is one tap away on the
-              competition page. */}
-          {competition.description && (
-            <p className="mt-2 line-clamp-2 max-w-xl text-[13px] leading-relaxed text-ink-dim sm:line-clamp-none sm:text-[14px]">
-              {competition.description}
-            </p>
-          )}
-        </div>
-
-        {/* Full width on a phone, so the two buttons share one line below the
-            title instead of being crushed beside it. */}
-        <div className="flex w-full shrink-0 gap-2 sm:w-auto">
-          <Link href={`/leaderboard/${competition.id}`} className="flex-1 sm:flex-none">
-            <Button variant="secondary" size="sm" className="w-full">
-              Standings
-            </Button>
-          </Link>
-          <Link href={`/competitions/${competition.id}`} className="flex-1 sm:flex-none">
-            <Button variant="secondary" size="sm" icon={<ArrowRight />} className="w-full">
-              Open
-            </Button>
-          </Link>
-        </div>
-      </div>
-
-      {/* The round, on its own ground rather than as another paragraph in the
-          same block — during an event this is the only row that matters. */}
-      <div
-        className={cn(
-          'flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t px-4 py-3.5 sm:px-6 sm:py-4',
-          isLive ? 'border-live/20 bg-live/[0.04]' : 'border-line bg-surface-2/30',
-        )}
-      >
-        <div className="min-w-0">
-          <p className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-faint">
-            {isLive ? (
-              <Radio aria-hidden size={13} strokeWidth={1.75} className="text-live" />
-            ) : (
-              <CalendarClock aria-hidden size={13} strokeWidth={1.5} />
-            )}
-            {loadingRounds ? 'Rounds' : isLive ? 'Happening now' : next ? 'Up next' : 'Rounds'}
-          </p>
-
-          {loadingRounds ? (
-            // One short line, not a panel-sized block: the shape around it is
-            // already correct and must not move when this resolves.
-            <Skeleton className="mt-2 h-[1.15rem] w-48 rounded" />
-          ) : focus ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <h3 className="text-[15px] font-medium text-ink">{focus.name}</h3>
-              <RoundStateBadge state={focus.state} />
-              <span className="text-[13px] text-ink-faint">
-                {focus._count.challenges} {focus.type === 'MCQ' ? 'questions' : 'problems'}
-              </span>
-            </div>
-          ) : (
-            <p className="mt-1.5 text-[14px] text-ink-dim">No rounds are open right now.</p>
-          )}
-        </div>
-
-        {/* Full width on a phone: it is the primary action on the page during
-            a round, and a 120px button floated right is both easy to miss and
-            awkward to hit with a thumb. */}
-        {focus?.state === 'LIVE' && data?.joined && (
-          <Link href={`/rounds/${focus.id}/${ROUND_PATH[focus.type]}`} className="w-full sm:w-auto">
-            <Button icon={<ArrowRight />} className="w-full">
-              Enter round
-            </Button>
-          </Link>
-        )}
-      </div>
-    </section>
-  );
-}
 
 /// Groups competitions by what a participant can actually do with them.
 ///
@@ -162,15 +34,17 @@ function DashboardContent() {
 
   const grouped = groupByState(competitions ?? []);
 
-  // The one that gets the detailed panel: live beats merely open.
-  const focus = grouped.live[0] ?? grouped.open[0] ?? null;
-
-  // ...and it is then excluded from the lists below, so it is not shown twice
-  // in two different shapes on the same screen.
-  const live = grouped.live.filter((c) => c.id !== focus?.id);
-  const open = grouped.open.filter((c) => c.id !== focus?.id);
+  // Everything a participant can act on goes in the carousel, live first. The
+  // sections below are then only what is left: finished competitions.
+  const featured = [...grouped.live, ...grouped.open];
   const past = grouped.past;
   const hasAny = (competitions?.length ?? 0) > 0;
+
+  // The team shown belongs to whichever slide is in view, so it keeps pace with
+  // the carousel instead of being pinned to the first competition.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const handleActive = useCallback((c: CompetitionListItem) => setActiveId(c.id), []);
+  const teamCompetitionId = activeId ?? featured[0]?.id ?? null;
 
   return (
     <>
@@ -203,44 +77,13 @@ function DashboardContent() {
         </div>
       ) : (
         <>
-          {focus && (
+          {featured.length > 0 && (
             <div className="space-y-4">
-              <CurrentCompetition competition={focus} />
+              <CompetitionCarousel competitions={featured} onActiveChange={handleActive} />
               {/* Beneath, not above. A team is a detail of the competition, and
                   it used to sit on top of the thing it belongs to. */}
-              <TeamCard competitionId={focus.id} />
+              {teamCompetitionId && <TeamCard competitionId={teamCompetitionId} />}
             </div>
-          )}
-
-          {live.length > 0 && (
-            <Section
-              icon={Radio}
-              tone="live"
-              title="Also live"
-              count={live.length}
-              blurb="Rounds are running in these too, and scores record as people submit."
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                {live.map((c) => (
-                  <CompetitionCard key={c.id} competition={c} />
-                ))}
-              </div>
-            </Section>
-          )}
-
-          {open.length > 0 && (
-            <Section
-              icon={LayoutList}
-              title="Open for registration"
-              count={open.length}
-              blurb="Not started yet. Join and form a team before the first round opens."
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                {open.map((c) => (
-                  <CompetitionCard key={c.id} competition={c} />
-                ))}
-              </div>
-            </Section>
           )}
 
           {past.length > 0 && (
