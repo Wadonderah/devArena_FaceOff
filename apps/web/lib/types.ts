@@ -164,6 +164,19 @@ export interface Leaderboard {
   generatedAt: string;
 }
 
+/// One of a participant's own code submissions, as `listMine` selects it.
+export interface CodeSubmissionSummary {
+  id: string;
+  challengeId: string;
+  language: Language;
+  status: SubmissionStatus;
+  passedTests: number | null;
+  totalTests: number | null;
+  rawScore: string | number | null;
+  submittedAt: string;
+  gradedAt: string | null;
+}
+
 export interface McqProgress {
   answered: { challengeId: string; questionId: string; answeredAt: string }[];
   answeredCount: number;

@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutGrid, LogOut, Trophy, Users, Wrench } from 'lucide-react';
+import { LayoutGrid, LogOut, PanelLeftClose, PanelLeftOpen, Trophy, Users, Wrench } from 'lucide-react';
 import { Monogram } from '@/components/brand-mark';
 import { NotificationBell } from '@/components/notification-bell';
 import { Avatar } from '@/components/ui/avatar';
@@ -14,6 +15,17 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/competitions', label: 'Competitions', icon: Trophy },
 ];
+
+/// Survives reloads so the choice is made once, not every visit.
+const RAIL_KEY = 'faceoff:rail';
+
+/// Hover intent. Without a delay the rail opened on any pointer that crossed
+/// it — including one merely travelling to the content — so it flew open and
+/// shut as the mouse passed. Opening is the deliberate act and waits longest;
+/// closing waits a little too, so cutting a corner on the way to a link does
+/// not snap it shut mid-reach.
+const OPEN_DELAY_MS = 220;
+const CLOSE_DELAY_MS = 120;
 
 const ROLE_LABEL: Record<string, string> = {
   PARTICIPANT: 'Participant',
@@ -82,24 +94,132 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { data: profile } = useProfile();
   const displayName = profile?.profile?.displayName;
 
+  // Two independent reasons to be open. `peek` is the hover, which is
+  // transient; `pinned` is a stated preference, which is not — and a rail that
+  // only ever opens on hover is unusable for anyone who navigates by keyboard
+  // or finds precise pointing difficult.
+  const [pinned, setPinned] = useState(false);
+  const [peek, setPeek] = useState(false);
+  const expanded = pinned || peek;
+
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /// One pending change at a time: entering then leaving quickly must cancel
+  /// the open rather than queue an open and a close behind each other.
+  const schedulePeek = (next: boolean) => {
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(
+      () => setPeek(next),
+      next ? OPEN_DELAY_MS : CLOSE_DELAY_MS,
+    );
+  };
+
+  useEffect(() => () => {
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+  }, []);
+
+  // Read after mount rather than during render: the server has no localStorage,
+  // and a different first render than first paint is a hydration error.
+  useEffect(() => {
+    try {
+      setPinned(window.localStorage.getItem(RAIL_KEY) === 'pinned');
+    } catch {
+      // Private browsing, or storage disabled. Collapsed is a fine default.
+    }
+  }, []);
+
+  const togglePin = () => {
+    setPinned((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(RAIL_KEY, next ? 'pinned' : 'collapsed');
+      } catch {
+        // Preference is lost on reload; the rail still works this session.
+      }
+      return next;
+    });
+  };
+
+  // Labels fade rather than unmount, so the icons never move and screen readers
+  // keep reading a name for every link.
+  const label = expanded ? 'truncate opacity-100 transition-opacity duration-150' : 'truncate opacity-0 transition-opacity duration-150';
+
   return (
     <div className="min-h-dvh lg:flex">
       {/* ── Desktop rail ──────────────────────────────────────────────── */}
-      {/* z-40 is for what is inside: `position: sticky` always creates a
-          stacking context, so the notification panel's z-50 is ranked within
-          this element and cannot otherwise clear a positioned `.panel`. */}
-      <aside className="sticky top-0 z-40 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-surface-1/60 px-3 py-4 lg:flex">
-        <div className="mb-6 flex items-center gap-2 px-2">
+      {/* A spacer that mirrors the rail's width exactly, so the page makes room
+          for it rather than being covered by it.
+          
+          The rail was first built to open *over* the page, on the reasoning that
+          reflowing on hover would be jumpy. On a 1440px screen that was wrong:
+          the content is centred at max-w-6xl, so an expanding rail ate the
+          112px margin and then 64px of the competition panel itself, with only
+          a hairline between them — which reads as a z-index fault, not as a
+          panel. Because this spacer and the rail share one width and one
+          transition, the content edge and the rail edge move together, which is
+          what makes it read as making room. */}
+      <div
+        aria-hidden
+        className={cn(
+          'hidden shrink-0 transition-[width] duration-300 ease-out-expo lg:block',
+          expanded ? 'w-60' : 'w-16',
+        )}
+      />
+
+      {/* z-40 is for what is inside: `position: fixed` creates a stacking
+          context, so the notification panel's z-50 is ranked within this
+          element and cannot otherwise clear a positioned `.panel`.
+
+          Opaque, not `/60`: it is fixed rather than in flow, so page content
+          scrolls beneath it at the top and bottom edges of the viewport. */}
+      <aside
+        onMouseEnter={() => schedulePeek(true)}
+        onMouseLeave={() => schedulePeek(false)}
+        // Focus opens it at once: a keyboard user has already committed, and
+        // waiting 220ms after a Tab reads as lag rather than as restraint.
+        onFocusCapture={() => setPeek(true)}
+        onBlurCapture={() => schedulePeek(false)}
+        className={cn(
+          'fixed left-0 top-0 z-40 hidden h-dvh flex-col border-r border-line bg-surface-1 px-3 py-4 transition-[width] duration-300 ease-out-expo lg:flex',
+          expanded ? 'w-60' : 'w-16',
+        )}
+      >
+        <div className="flex items-center gap-2.5 px-2">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
             <Monogram size={26} />
-            <span className="truncate text-sm font-semibold tracking-tight">Face-Off</span>
+            <span className={cn('text-sm font-semibold tracking-tight', label)}>Face-Off</span>
           </Link>
-          {/* Only once there is a session. Rendering it for a signed-out
-              visitor would poll an endpoint that can only 401. */}
-          {user && <NotificationBell className="ml-auto" />}
+
+          {/* Only reachable once the rail is open, which is the only time it
+              makes sense to press. */}
+          <button
+            type="button"
+            onClick={togglePin}
+            aria-label={pinned ? 'Unpin sidebar' : 'Keep sidebar open'}
+            aria-pressed={pinned}
+            className={cn(
+              'ml-auto grid size-7 shrink-0 place-items-center rounded-control text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink',
+              expanded ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+          >
+            {pinned ? (
+              <PanelLeftClose aria-hidden size={15} strokeWidth={1.5} />
+            ) : (
+              <PanelLeftOpen aria-hidden size={15} strokeWidth={1.5} />
+            )}
+          </button>
         </div>
 
-        <nav aria-label="Main" className="flex flex-col gap-1">
+        {/* On its own row rather than beside the brand: at the collapsed width
+            a 26px monogram and a 32px bell cannot share a line, and the unread
+            badge is the one thing in here that must stay visible when shut. */}
+        {user && (
+          <div className="mt-3 flex px-0.5">
+            <NotificationBell />
+          </div>
+        )}
+
+        <nav aria-label="Main" className="mt-6 flex flex-col gap-1">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -112,8 +232,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   : 'text-ink-dim hover:bg-surface-2/60 hover:text-ink',
               )}
             >
-              <link.icon aria-hidden size={16} strokeWidth={1.5} />
-              <span className="truncate">{link.longLabel ?? link.label}</span>
+              <link.icon aria-hidden size={16} strokeWidth={1.5} className="shrink-0" />
+              <span className={label}>{link.longLabel ?? link.label}</span>
             </Link>
           ))}
         </nav>
@@ -121,7 +241,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto space-y-3 border-t border-line pt-3">
           <div className="flex items-center gap-2.5 px-1">
             <Avatar name={displayName ?? user?.email} src={profile?.profile?.avatarUrl} size={32} />
-            <span className="min-w-0 flex-1">
+            <span className={cn('min-w-0 flex-1', expanded ? 'opacity-100 transition-opacity duration-150' : 'opacity-0 transition-opacity duration-150')}>
               <span className="block truncate text-[13px] text-ink">{user?.email ?? '—'}</span>
               <span className="block text-[11px] text-ink-faint">
                 {user ? (ROLE_LABEL[user.role] ?? user.role) : ''}
@@ -129,13 +249,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-2">
-            <ThemeToggle />
+          {/* ThemeToggle is a three-way segmented control about 90px wide, and
+              the collapsed rail has 40px of inner space. The aside deliberately
+              has no `overflow-hidden` — that would clip the notification
+              popover — so a toggle left mounted here spilled out past the rail
+              rather than being cut off. It is dropped from the layout entirely
+              while shut, which is also when it cannot be clicked. */}
+          <div
+            className={cn(
+              'flex items-center gap-2',
+              expanded ? 'justify-between' : 'justify-center',
+            )}
+          >
+            {expanded && <ThemeToggle />}
             <button
               type="button"
               onClick={signOut}
               aria-label="Sign out"
-              className="grid size-8 place-items-center rounded-control text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+              className="grid size-8 shrink-0 place-items-center rounded-control text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <LogOut aria-hidden size={16} strokeWidth={1.5} />
             </button>
@@ -152,6 +283,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="ml-auto flex items-center gap-2">
           {user && <NotificationBell />}
           <ThemeToggle />
+          {/* The only identity on a phone: the rail is desktop-only, and with
+              the name gone from the dashboard there was otherwise nothing on a
+              shared venue laptop to say who is signed in. */}
+          <Avatar
+            name={displayName ?? user?.email}
+            src={profile?.profile?.avatarUrl}
+            size={26}
+            className="ml-0.5"
+          />
           <button
             type="button"
             onClick={signOut}

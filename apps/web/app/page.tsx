@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { BrandMark } from '@/components/brand-mark';
+import { ProductPreview } from '@/components/product-preview';
 
 // Illustrative weights — organizers set their own per competition.
 const ROUNDS = [
@@ -169,6 +170,21 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* ── A look inside ────────────────────────────────────────────────── */}
+      <section className="mx-auto max-w-5xl px-5 pt-4 pb-6 sm:pt-8">
+        <Reveal>
+          <h2 className="text-center font-mono text-[12px] uppercase tracking-[0.16em] text-ink-faint">
+            What it looks like from the inside
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-center text-[14px] leading-relaxed text-ink-dim">
+            Three screens a competitor actually spends the event on.
+          </p>
+          <div className="mt-7">
+            <ProductPreview />
+          </div>
+        </Reveal>
       </section>
 
       {/* ── How it runs ──────────────────────────────────────────────────── */}
