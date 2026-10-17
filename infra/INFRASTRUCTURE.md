@@ -1,9 +1,14 @@
-# FaceOff Infrastructure
+# 🏗️ FaceOff Infrastructure
 
-**Project:** Software Engineering Face-Off  
+<div align="center">
+
+## Software Engineering Face-Off
+
 **Platform:** akwannya-hub.org  
 **Date completed:** October 17, 2026  
-**Engineer:** Wadonderah A. Collins  
+**Engineer:** Wadonderah A. Collins
+
+</div>
 
 ---
 
@@ -41,7 +46,7 @@ This work introduced Terraform for infrastructure management and migrated the da
 
 ## 2. Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                        Internet                             │
 └──────────────────────┬──────────────────────────────────────┘
@@ -54,7 +59,7 @@ This work introduced Terraform for infrastructure management and migrated the da
               └────────┬────────┘
                        │ HTTPS
 ┌──────────────────────▼──────────────────────────────────────┐
-│           AWS EC2  i-05561a750311d030a                       │
+│           AWS EC2  i-05561a750311d030a                     │
 │           t3.medium · us-east-1b · 172.31.26.81             │
 │                                                             │
 │   ┌─────────┐   ┌──────────────┐   ┌────────────────────┐  │
@@ -68,8 +73,8 @@ This work introduced Terraform for infrastructure management and migrated the da
 │                        │           └─────────┬────────────┘ │
 │                        │                     │              │
 │                  ┌─────▼─────────────────────▼────────────┐ │
-│                  │           Judge0 CE                     │ │
-│                  │           port 2358                     │ │
+│                  │           Judge0 CE                    │ │
+│                  │           port 2358                    │ │
 │                  └────────────────────────────────────────┘ │
 └──────────────────────┬──────────────────────────────────────┘
                        │ PostgreSQL (VPC-internal, port 5432)
@@ -99,7 +104,7 @@ This work introduced Terraform for infrastructure management and migrated the da
 
 All infrastructure is managed with Terraform. The code lives in `infra/` in this repository.
 
-```
+```text
 infra/
 ├── bootstrap/                      Phase 0 — Terraform state backend (run once)
 │   ├── main.tf
@@ -150,7 +155,7 @@ infra/
 
 ### State file layout
 
-```
+```text
 s3://akwannya-faceoff-tfstate/
 ├── bootstrap/terraform.tfstate          ← bootstrap module state
 └── environments/production/terraform.tfstate   ← production state
