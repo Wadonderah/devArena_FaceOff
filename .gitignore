@@ -39,3 +39,11 @@ ONBOARDING.pdf
 
 # load test
 loadtest/
+
+# Terraform
+**/.terraform/
+*.tfstate.backup
+*.tfstate.lock.info
+infra/**/terraform.tfvars
+# .terraform.lock.hcl is intentionally NOT ignored — it pins provider versions
+# and must be committed so every engineer gets the same providers.

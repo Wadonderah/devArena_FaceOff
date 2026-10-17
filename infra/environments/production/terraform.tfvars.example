@@ -1,0 +1,24 @@
+# Copy this file to terraform.tfvars and fill in the values marked <replace>.
+# terraform.tfvars is in .gitignore — it will never be committed.
+
+aws_region     = "us-east-1"
+aws_account_id = "<your-aws-account-id>"
+project        = "faceoff"
+environment    = "production"
+
+# ── Network (get these from your AWS account) ─────────────────────────────────
+vpc_id                = "<vpc-id>"
+ec2_security_group_id = "<ec2-security-group-id>"
+rds_subnet_ids        = ["<subnet-id-az-a>", "<subnet-id-az-b>"]
+rds_preferred_az      = "<az-matching-ec2>"   # e.g. us-east-1b
+
+# ── RDS ───────────────────────────────────────────────────────────────────────
+db_instance_class        = "db.t4g.micro"
+db_engine_version        = "18.6"
+db_allocated_storage     = 20
+db_name                  = "faceoff"
+db_backup_retention_days = 7
+
+# Generate with: openssl rand -base64 32
+db_username = "<replace>"
+db_password = "<replace>"

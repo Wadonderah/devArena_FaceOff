@@ -1,0 +1,9 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is in .gitignore and will not be committed.
+
+aws_region        = "us-east-1"
+aws_account_id    = "163088933322"
+state_bucket_name = "akwannya-faceoff-tfstate"
+lock_table_name   = "akwannya-faceoff-tflock"
+project           = "faceoff"
+environment       = "production"
