@@ -6,7 +6,7 @@
 
 **Platform:** akwannya-hub.org  
 **Date completed:** October 17, 2026  
-**Engineer:** Wadonderah A. Collins
+**Engineer:** Wadondera A. Collins
 
 </div>
 
